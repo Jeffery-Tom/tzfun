@@ -1,0 +1,27 @@
+package com.tzfun.tzfun.mapper;
+
+import com.tzfun.tzfun.entity.Store;
+import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import java.util.List;
+
+/**
+ * 门店表 Mapper。
+ */
+public interface StoreMapper {
+
+    @Select("SELECT * FROM store ORDER BY id")
+    List<Store> selectAll();
+
+    @Insert("INSERT INTO store(name, city, address, lng, lat, create_time) " +
+            "VALUES(#{name}, #{city}, #{address}, #{lng}, #{lat}, NOW())")
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insert(Store store);
+
+    @Update("UPDATE store SET name=#{name}, city=#{city}, address=#{address}, " +
+            "lng=#{lng}, lat=#{lat} WHERE id=#{id}")
+    int updateById(Store store);
+}

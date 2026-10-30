@@ -24,6 +24,15 @@ public class UserContext {
         return ROLE.get();
     }
 
+    /**
+     * 校验当前登录用户是否为 ADMIN，否则抛 403。
+     */
+    public static void requireAdmin() {
+        if (!"ADMIN".equals(ROLE.get())) {
+            throw new CustomException("403", "无权限");
+        }
+    }
+
     public static void clear() {
         USER_ID.remove();
         ROLE.remove();
