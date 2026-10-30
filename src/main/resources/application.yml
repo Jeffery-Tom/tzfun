@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: TzFun
+
+  # MySQL 数据源
+  datasource:
+    url: "jdbc:mysql://localhost:3306/tzfun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# 服务端口
+server:
+  port: 9070
+
+# MyBatis 驼峰映射（create_time -> createTime）
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT 配置
+jwt:
+  secret: tzfun-jwt-secret-key-please-change-me-32bytes-min
+  expire-ms: 86400000
