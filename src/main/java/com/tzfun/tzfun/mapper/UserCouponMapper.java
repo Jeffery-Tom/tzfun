@@ -24,6 +24,9 @@ public interface UserCouponMapper {
     @Delete("DELETE FROM user_coupon WHERE id = #{id}")
     int deleteById(Long id);
 
+    @Select("SELECT * FROM user_coupon WHERE id = #{id}")
+    UserCoupon selectById(Long id);
+
     /** 我的卡包（仅未用），JOIN 模板补券名/面额。 */
     @Select("SELECT uc.id, uc.template_id, uc.status, uc.expire_time, uc.create_time, " +
             "t.name AS template_name, t.type, t.value, t.min_spend, t.max_discount " +

@@ -43,4 +43,10 @@ public interface OrderMapper {
     @Update("UPDATE orders SET return_info = #{returnInfo}, pay_amount = pay_amount + #{extraFee}, update_time = NOW() " +
             "WHERE id = #{id}")
     int fillReturn(@Param("id") Long id, @Param("returnInfo") String returnInfo, @Param("extraFee") BigDecimal extraFee);
+
+    /** 支付回写：用券后更新折扣金额、实付金额、关联券 id。 */
+    @Update("UPDATE orders SET discount_amount = #{discountAmount}, pay_amount = #{payAmount}, " +
+            "coupon_id = #{couponId}, update_time = NOW() WHERE id = #{id}")
+    int updateDiscount(@Param("id") Long id, @Param("discountAmount") BigDecimal discountAmount,
+                       @Param("payAmount") BigDecimal payAmount, @Param("couponId") Long couponId);
 }

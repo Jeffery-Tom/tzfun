@@ -9,6 +9,7 @@ import com.tzfun.tzfun.mapper.OrderMapper;
 import com.tzfun.tzfun.mapper.PaymentMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
 
 /**
  * 支付（mock）：创建支付单 + 异步回调幂等。
@@ -85,7 +86,12 @@ public class PaymentService {
 
         if (dto.getCouponId() != null) {
             try {
-                couponService.useCoupon(dto.getCouponId(), dto.getOrderId());
+                BigDecimal discount = couponService.applyCoupon(dto.getCouponId(), dto.getOrderId(), order.getPayAmount());
+                BigDecimal newPay = order.getPayAmount().subtract(discount);
+                if (newPay.compareTo(BigDecimal.ZERO) < 0) {
+                    newPay = BigDecimal.ZERO;
+                }
+                orderMapper.updateDiscount(dto.getOrderId(), discount, newPay, dto.getCouponId());
             } catch (CustomException e) {
                 // 券已用（status!=0）属期望终态，幂等忽略
             }

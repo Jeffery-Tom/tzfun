@@ -89,6 +89,21 @@ public class CouponService {
         }
     }
 
+    /**
+     * 支付成功用券（封装）：先算折扣，再条件更新标记已用；返回实际抵扣金额供回写订单。
+     * 券不存在/不可用（status!=0 已用等）抛 CustomException，由调用方 catch 做幂等忽略。
+     */
+    public BigDecimal applyCoupon(Long userCouponId, Long orderId, BigDecimal orderAmount) {
+        UserCoupon uc = userCouponMapper.selectById(userCouponId);
+        if (uc == null) {
+            throw new CustomException("400", "券不存在");
+        }
+        CouponTemplate t = couponTemplateMapper.selectById(uc.getTemplateId());
+        BigDecimal discount = calcDiscount(t, orderAmount);
+        useCoupon(userCouponId, orderId); // 内部 WHERE status=0 条件更新，行数≠1 抛"券不可用"
+        return discount;
+    }
+
     /** 退券：取消/超时退回（幂等，非已用状态静默忽略）。 */
     public void returnCoupon(Long userCouponId) {
         userCouponMapper.returnCoupon(userCouponId);
