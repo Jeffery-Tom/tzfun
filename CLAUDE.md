@@ -11,14 +11,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Spring Boot 4.1.2 + Java 21 + MyBatis（注解版，已用 @Select/@Insert）+ MySQL 8 + JWT(jjwt 0.12.6) + BCrypt(spring-security-crypto)。
 - 阶段1 已引入 **Redis**（模块3 时间窗库存，StringRedisTemplate + Lua 原子占释）。
 - 阶段2 才引入 RocketMQ（异步化 / 超时释放 / 用车券秒杀）；阶段3 SpringCloud（Gateway/Nacos/Seata）；ES 可选。
-- **阶段1 严禁擅自引入** RocketMQ / SpringCloud / ES / WebSocket / 任何新中间件——不在范围，加了即过度设计。
+- **阶段1 严禁擅自引入** RocketMQ / SpringCloud / ES / WebSocket 等；**阶段2 引入 RocketMQ 已在范围**（见 doc/阶段2开场指令.md）；**阶段3 才引入 SpringCloud**；ES / WebSocket / 其他新中间件仍严禁擅自引入，不在范围即过度设计。
 - 分阶段任务卡在 `doc/TzFun阶段1任务卡.md` 及 `doc/TzFun阶段1-模块N-*.md`，按模块逐个 `Read` 实现。
 
 ## 阶段1 模块进度（CC 自检用）
 
 - ✅ 模块1 用户认证：已完成（UserController/UserService/JwtUtil/LoginInterceptor/UserContext 等）。
-- ✅ 模块2 门店/车型/车辆：已完成（Store/CarType/Car 三表 CRUD + availableCount + UserContext.requireAdmin 鉴权）。✅ 模块3 时间窗库存(Redis+Lua)：已完成（RedisInventoryService + occupy/release.lua 原子占释 + /carType/available 选车 + rebuildFromDb 兜底 + 占位 orders 表）。✅ 模块4 订单状态机/下单/取还车（Order/OrderMapper/OrderService/OrderController/OrderStatus 状态机 + 下单占库存补偿 + 取还车 + 水平越权）→ ✅ 模块5 优惠券：已完成（CouponTemplate/UserCoupon 双表 + 领券先插唯一索引拦重复再条件更新 claimed_count 防超发 + useCoupon WHERE status=0 防复用 + calcDiscount DECIMAL 封顶不超订单额 + 过期 Job）→ ✅ 模块6 支付(mock)：已完成（PaymentController/PaymentService/PaymentMapper/Payment/PayNotifyDTO + handleNotify 幂等 out_trade_no 唯一+已支付直接 SUCCESS + 订单确认 WHERE status=PENDING + useCoupon 重复回调 try/catch 幂等忽略 + 金额 DECIMAL 比对订单权威值防篡改 + WebConfig 放行 /pay/notify）。
-- 每模块开始前先 `Read doc/TzFun阶段1-模块N-*.md`。
+- ✅ 模块2 门店/车型/车辆：已完成（Store/CarType/Car 三表 CRUD + availableCount + UserContext.requireAdmin 鉴权）。✅ 模块3 时间窗库存(Redis+Lua)：已完成（RedisInventoryService + occupy/release.lua 原子占释 + /carType/available 选车 + rebuildFromDb 兜底 + 占位 orders 表）。✅ 模块4 订单状态机/下单/取还车（Order/OrderMapper/OrderService/OrderController/OrderStatus 状态机 + 下单占库存补偿 + 取还车 + 水平越权）→ ✅ 模块5 优惠券：已完成（CouponTemplate/UserCoupon 双表 + 领券先插唯一索引拦重复再条件更新 claimed_count 防超发 + useCoupon WHERE status=0 防复用 + calcDiscount DECIMAL 封顶不超订单额 + 过期 Job）→ ✅ 模块6 支付(mock)：已完成（PaymentController/PaymentService/PaymentMapper/Payment/PayNotifyDTO + handleNotify 幂等 out_trade_no 唯一+已支付直接 SUCCESS + 订单确认 WHERE status=PENDING + useCoupon 重复回调 try/catch 幂等忽略 + 金额 DECIMAL 比对订单权威值防篡改 + WebConfig 放行 /pay/notify)。
+- 🔶 阶段2（进行中）：RocketMQ 异步化 / 超时未支付释放库存 / 优惠券秒杀，详见 doc/阶段2开场指令.md。
+- 每模块开始前先 `Read doc/TzFun阶段1-模块N-*.md`（阶段2 改读 doc/阶段2开场指令.md）。
 
 ## 项目结构速查（/clear 后靠此重建认知，禁止全项目扫描）
 
