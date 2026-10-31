@@ -1,5 +1,3 @@
--- 模块5 优惠券建表 SQL（请在 tzfun 库执行）
--- 注意：项目不自动建表，必须手动执行本文件。
 
 CREATE TABLE IF NOT EXISTS coupon_template (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
