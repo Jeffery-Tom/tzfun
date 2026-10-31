@@ -16,6 +16,12 @@ public interface StoreMapper {
     @Select("SELECT * FROM store ORDER BY id")
     List<Store> selectAll();
 
+    @Select("SELECT * FROM store WHERE id = #{id}")
+    Store selectById(Long id);
+
+    @Select("SELECT * FROM store WHERE city = #{city} ORDER BY id")
+    List<Store> selectByCity(String city);
+
     @Insert("INSERT INTO store(name, city, address, lng, lat, create_time) " +
             "VALUES(#{name}, #{city}, #{address}, #{lng}, #{lat}, NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")

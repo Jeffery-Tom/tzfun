@@ -1,9 +1,11 @@
 package com.tzfun.tzfun.controller;
 
 import com.tzfun.tzfun.common.Result;
+import com.tzfun.tzfun.dto.AvailableDTO;
 import com.tzfun.tzfun.dto.CarTypeDTO;
 import com.tzfun.tzfun.entity.CarType;
 import com.tzfun.tzfun.service.CarTypeService;
+import com.tzfun.tzfun.vo.AvailableVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,5 +48,10 @@ public class CarTypeController {
     @GetMapping("/availableCount")
     public Result<Integer> availableCount(@RequestParam Long storeId, @RequestParam Long carTypeId) {
         return Result.success(carTypeService.availableCount(storeId, carTypeId));
+    }
+
+    @PostMapping("/available")
+    public Result<List<AvailableVO>> available(@Valid @RequestBody AvailableDTO dto) {
+        return Result.success(carTypeService.available(dto));
     }
 }

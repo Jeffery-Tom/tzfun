@@ -17,6 +17,9 @@ public interface CarTypeMapper {
     @Select("SELECT * FROM car_type ORDER BY id")
     List<CarType> selectAll();
 
+    @Select("SELECT * FROM car_type WHERE id = #{id}")
+    CarType selectById(Long id);
+
     @Insert("INSERT INTO car_type(name, brand, seats, transmission, daily_price, image, create_time) " +
             "VALUES(#{name}, #{brand}, #{seats}, #{transmission}, #{dailyPrice}, #{image}, NOW())")
     @Options(useGeneratedKeys = true, keyProperty = "id")

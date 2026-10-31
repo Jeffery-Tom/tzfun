@@ -45,6 +45,12 @@
 			<version>4.1.0</version>
 		</dependency>
 
+		<!-- Redis（时间窗库存，Lettuce 客户端内置） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
 		<!-- JWT -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

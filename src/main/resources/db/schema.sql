@@ -72,3 +72,28 @@ INSERT INTO `car`(`id`, `store_id`, `car_type_id`, `plate_no`, `status`, `create
 (5, 2, 1, '京A10001', '在库', NOW()),
 (6, 2, 1, '京A10002', '维护', NOW())
 ON DUPLICATE KEY UPDATE id = id;
+
+-- TzFun 模块4：订单表（完整字段）
+CREATE TABLE IF NOT EXISTS `orders` (
+    `id`              BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `order_no`        VARCHAR(50)   NOT NULL COMMENT '订单号',
+    `user_id`         BIGINT        NOT NULL COMMENT '下单用户id',
+    `store_id`        BIGINT        NOT NULL COMMENT '门店id',
+    `car_type_id`     BIGINT        NOT NULL COMMENT '车型id',
+    `car_id`          BIGINT        DEFAULT NULL COMMENT '取车时分配的车辆id',
+    `start_time`      DATETIME      NOT NULL COMMENT '取车时间',
+    `end_time`        DATETIME      NOT NULL COMMENT '还车时间',
+    `status`          VARCHAR(20)   NOT NULL COMMENT '订单状态',
+    `total_amount`    DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '总金额',
+    `discount_amount` DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '优惠金额',
+    `pay_amount`      DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '实付金额',
+    `coupon_id`       BIGINT        DEFAULT NULL COMMENT '优惠券id',
+    `pickup_info`     VARCHAR(500)  DEFAULT NULL COMMENT '取车信息(mock)',
+    `return_info`     VARCHAR(500)  DEFAULT NULL COMMENT '还车信息(mock)',
+    `create_time`     DATETIME      DEFAULT NULL COMMENT '创建时间',
+    `update_time`     DATETIME      DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_order_no` (`order_no`),
+    KEY `idx_user` (`user_id`),
+    KEY `idx_store_type` (`store_id`, `car_type_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='订单表';
