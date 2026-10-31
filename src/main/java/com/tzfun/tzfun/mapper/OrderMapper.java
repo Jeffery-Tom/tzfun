@@ -23,6 +23,11 @@ public interface OrderMapper {
     @Select("SELECT * FROM orders WHERE id = #{id}")
     Order selectById(Long id);
 
+    /** 超时未支付订单：PENDING 且创建时间早于 N 分钟前，供定时任务兜底扫描。 */
+    @Select("SELECT * FROM orders WHERE status = 'PENDING' " +
+            "AND create_time < DATE_SUB(NOW(), INTERVAL #{minutes} MINUTE)")
+    List<Order> selectTimeoutPending(@Param("minutes") int minutes);
+
     @Insert("INSERT INTO orders(order_no, user_id, store_id, car_type_id, start_time, end_time, status, " +
             "total_amount, discount_amount, pay_amount, create_time, update_time) " +
             "VALUES(#{orderNo}, #{userId}, #{storeId}, #{carTypeId}, #{startTime}, #{endTime}, #{status}, " +

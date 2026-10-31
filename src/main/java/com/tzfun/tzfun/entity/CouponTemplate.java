@@ -31,5 +31,7 @@ public class CouponTemplate {
     private LocalDateTime useEnd;
     /** 1上架 0下架。 */
     private Integer status;
+    /** 0普通 1秒杀。 */
+    private Integer seckill;
     private LocalDateTime createTime;
 }

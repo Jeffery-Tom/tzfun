@@ -76,6 +76,13 @@
 			<artifactId>spring-security-crypto</artifactId>
 		</dependency>
 
+		<!-- RocketMQ（阶段2：异步化/超时释放/秒杀落库，原生客户端连 5.x broker 的 remoting 协议） -->
+		<dependency>
+			<groupId>org.apache.rocketmq</groupId>
+			<artifactId>rocketmq-client</artifactId>
+			<version>4.9.8</version>
+		</dependency>
+
 		<!-- Lombok -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>

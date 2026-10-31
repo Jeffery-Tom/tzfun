@@ -7,6 +7,7 @@ import com.tzfun.tzfun.entity.UserCoupon;
 import com.tzfun.tzfun.mapper.CouponTemplateMapper;
 import com.tzfun.tzfun.mapper.UserCouponMapper;
 import com.tzfun.tzfun.service.CouponService;
+import com.tzfun.tzfun.service.SeckillService;
 import com.tzfun.tzfun.vo.UserCouponVO;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +31,8 @@ public class CouponController {
     private CouponTemplateMapper couponTemplateMapper;
     @Resource
     private UserCouponMapper userCouponMapper;
+    @Resource
+    private SeckillService seckillService;
 
     /** 可领券列表。 */
     @GetMapping("/listTemplates")
@@ -41,6 +44,13 @@ public class CouponController {
     @PostMapping("/claim/{templateId}")
     public Result<UserCoupon> claim(@PathVariable Long templateId) {
         return Result.success(couponService.claim(templateId, UserContext.getUserId()));
+    }
+
+    /** 秒杀领券（Redis Lua 预扣 + MQ 异步落库，与普通 claim 分开）。 */
+    @PostMapping("/seckill/{templateId}")
+    public Result<Void> seckill(@PathVariable Long templateId) {
+        seckillService.seckill(templateId, UserContext.getUserId());
+        return Result.success();
     }
 
     /** 我的卡包（status=0）。 */

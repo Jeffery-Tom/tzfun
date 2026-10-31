@@ -42,3 +42,8 @@ VALUES
      '2026-01-01 00:00:00', '2030-01-01 00:00:00', '2026-01-01 00:00:00', '2030-01-01 00:00:00', 1),
     ('立减5元', 'DIRECT', 5.00, 0.00, NULL, 100, 0, 1,
      '2026-01-01 00:00:00', '2030-01-01 00:00:00', '2026-01-01 00:00:00', '2030-01-01 00:00:00', 1);
+
+-- ============ 阶段2：优惠券秒杀 ============
+-- coupon_template 加 seckill 标记（0普通 1秒杀）
+ALTER TABLE coupon_template ADD COLUMN seckill TINYINT NOT NULL DEFAULT 0 COMMENT '0普通 1秒杀';
+-- 说明：user_coupon 的 uk_user_template(user_id, template_id) 唯一索引已存在（见上建表），秒杀兜底复用，无需新增。

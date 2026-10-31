@@ -11,7 +11,9 @@ import com.tzfun.tzfun.mapper.CarMapper;
 import com.tzfun.tzfun.mapper.CarTypeMapper;
 import com.tzfun.tzfun.mapper.OrderMapper;
 import com.tzfun.tzfun.mapper.StoreMapper;
+import com.tzfun.tzfun.common.mq.MqProducer;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -29,6 +31,9 @@ public class OrderService {
     private static final BigDecimal OVER_MILEAGE_FEE = new BigDecimal("2");
     private static final BigDecimal DAMAGE_FEE = new BigDecimal("200");
 
+    /** RocketMQ 延迟等级 15 = 20 分钟（4.x 固定 18 级，无精确 15 分钟档，精确释放靠定时任务兜底）。 */
+    private static final int TIMEOUT_DELAY_LEVEL = 15;
+
     @Resource
     private OrderMapper orderMapper;
     @Resource
@@ -39,6 +44,13 @@ public class OrderService {
     private CarMapper carMapper;
     @Resource
     private RedisInventoryService inventoryService;
+    @Resource
+    private CouponService couponService;
+    @Resource
+    private MqProducer mqProducer;
+
+    @Value("${rocketmq.order.timeout-topic}")
+    private String timeoutTopic;
 
     /** 下单：校验 -> 占库存 -> 算钱 -> 落库；占库存后落库失败须 release 补偿。 */
     public Order createOrder(OrderDTO dto) {
@@ -88,6 +100,7 @@ public class OrderService {
             inventoryService.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
             throw e;
         }
+        mqProducer.send(timeoutTopic, String.valueOf(order.getId()), TIMEOUT_DELAY_LEVEL);
         return order;
     }
 
@@ -139,16 +152,36 @@ public class OrderService {
         changeStatus(orderId, OrderStatus.RETURNED, OrderStatus.SETTLED);
     }
 
-    /** 取消：PENDING/CONFIRMED -> CANCELLED，并释放时间窗库存。 */
+    /** 取消（登录用户手动）：PENDING/CONFIRMED -> CANCELLED，释放库存并退券。 */
     public void cancel(Long orderId) {
-        Order o = getOwnedOrder(orderId);
+        doCancel(getOwnedOrder(orderId));
+    }
+
+    /** 超时未支付自动取消（MQ/定时任务，无登录态）：仅 PENDING 才处理，幂等。 */
+    public void cancelTimeout(Long orderId) {
+        Order o = orderMapper.selectById(orderId);
+        if (o == null || !OrderStatus.PENDING.name().equals(o.getStatus())) {
+            return;
+        }
+        try {
+            doCancel(o);
+        } catch (CustomException e) {
+            // 并发下状态已被改（支付成功/已取消），条件更新冲突属正常，吞掉保证幂等
+        }
+    }
+
+    /** 取消核心：状态流转 + 释放时间窗库存 + 退券（若已用券）。 */
+    private void doCancel(Order o) {
         OrderStatus cur = OrderStatus.valueOf(o.getStatus());
         if (cur != OrderStatus.PENDING && cur != OrderStatus.CONFIRMED) {
             throw new CustomException("400", "当前状态不可取消");
         }
-        changeStatus(orderId, cur, OrderStatus.CANCELLED);
+        changeStatus(o.getId(), cur, OrderStatus.CANCELLED);
         inventoryService.release(o.getStoreId(), o.getCarTypeId(),
                 o.getStartTime().toLocalDate(), o.getEndTime().toLocalDate());
+        if (o.getCouponId() != null) {
+            couponService.returnCoupon(o.getCouponId());
+        }
     }
 
     /** 状态流转：先校验 ALLOWED，再条件更新；受影响行数=0 视为并发冲突。 */
