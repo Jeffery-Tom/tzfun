@@ -55,9 +55,14 @@ public class PaymentService {
         return mockPage(p);
     }
 
-    /** 异步回调：幂等处理，返回 SUCCESS/FAIL 供网关判断是否重试。 */
+    /** 异步回调：幂等处理，返回 SUCCESS/FAIL 供网关判断是否重试。
+     * 一定要做幂等处理,因为只要网关收不到SUCCESS,那就会一直尝试重试
+     * 幂等目标：同一个支付通知，不管推送 1 次还是 N 次，业务只会处理一次
+     * */
+
     public String handleNotify(PayNotifyDTO dto) {
         Payment p = paymentMapper.selectByOutTradeNo(dto.getOutTradeNo());
+        //1.payment 表以 outTradeNo 判断：如果 payment 已经是【已支付】，直接 return SUCCESS（第一道拦截）
         if (p != null && "已支付".equals(p.getStatus())) {
             return "SUCCESS"; // 幂等去重：已处理过直接成功
         }
@@ -71,6 +76,7 @@ public class PaymentService {
             return "FAIL";
         }
 
+        //如果极端情况订单不存在,补建一个'未支付'状态的订单,用于兜底完成业务
         if (p == null) {
             p = new Payment();
             p.setOrderId(dto.getOrderId());
@@ -81,7 +87,9 @@ public class PaymentService {
             paymentMapper.insert(p);
         }
 
-        // 防重复确认：条件更新，行数=0 说明已手动 confirm，属正常不报错
+        // 防重复确认：条件更新，行数=0 说明已手动 confirm，属正常不报错  *乐观锁思想*
+        //2.订单更新用 CAS：`update ... where status=PENDING`，保证订单确认动作只执行一次（第二道闸门）
+        //要是不防,就会导致优惠券被使用两次(业务崩溃)
         orderMapper.updateStatus(dto.getOrderId(), "PENDING", "CONFIRMED");
 
         if (dto.getCouponId() != null) {

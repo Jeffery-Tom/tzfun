@@ -34,3 +34,17 @@ build/
 
 ### Claude Code ###
 .claude/
+
+# 本地参考文档（不入库，避免暴露阶段性 / 协作过程文件）
+doc/TzFun架构规格v1.0.md
+doc/模块3开场指令.md
+doc/模块4开场指令.md
+doc/模块5开场指令.md
+doc/模块6开场指令.md
+doc/阶段2开场指令.md
+doc/TzFun阶段1任务卡.md
+doc/阶段1-简历素材.md
+doc/端到端验收清单.md
+doc/TzFun阶段1-模块5-SQL.sql
+doc/TzFun阶段1-模块6-SQL.sql
+doc/TzFun阶段1-模块*.md

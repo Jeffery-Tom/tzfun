@@ -77,21 +77,28 @@ public class CarTypeService {
         List<AvailableVO> result = new ArrayList<>();
         for (Store store : stores) {
             for (CarType type : types) {
+                //过滤价格
                 if (dto.getPriceMin() != null && type.getDailyPrice().compareTo(dto.getPriceMin()) < 0) {
                     continue;
                 }
                 if (dto.getPriceMax() != null && type.getDailyPrice().compareTo(dto.getPriceMax()) > 0) {
                     continue;
                 }
+                //查看当前可用库存
                 int n = carTypeMapper.countAvailable(store.getId(), type.getId());
+                //没车 直接跳过这个车型
                 if (n <= 0) {
                     continue;
                 }
+                //一开始给最大值，用来不断记录最小值
                 int min = Integer.MAX_VALUE;
+                //从开始日期start，一直到end结束，每天循环一次
                 for (LocalDate d = dto.getStart(); !d.isAfter(dto.getEnd()); d = d.plusDays(1)) {
                     inventoryService.initSlot(store.getId(), type.getId(), d, n);
+                    //获取当天可用数量，和min比较，保留最小值
                     min = Math.min(min, inventoryService.getAvailable(store.getId(), type.getId(), d));
                 }
+                //如果租期内最小可用数量 >=1，说明整个租期每天都有车，可以对外展示这个车型
                 if (min >= 1) {
                     AvailableVO vo = new AvailableVO();
                     vo.setStoreId(store.getId());

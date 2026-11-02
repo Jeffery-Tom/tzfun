@@ -43,15 +43,20 @@ public class RedisInventoryService {
         return "inv:" + storeId + ":" + carTypeId + ":" + date;
     }
 
+
+    //*expand作用:生成每一天的key存入keys数组*
+    //生成redis中的key:inventory:storeId:carTypeId:2026-11-01
     private List<String> expand(Long storeId, Long carTypeId, LocalDate start, LocalDate end) {
         List<String> keys = new ArrayList<>();
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
             keys.add(key(storeId, carTypeId, d));
         }
+        //把租期内每一天的 key 全部放进 keys 数组传给 Lua。
         return keys;
     }
 
     /** 初始化单日槽位（不存在才设，NX）。 */
+    //  key 不存在：写入初始库存 = n        key 已经存在：啥也不干
     public void initSlot(Long storeId, Long carTypeId, LocalDate date, int n) {
         redis.opsForValue().setIfAbsent(key(storeId, carTypeId, date), String.valueOf(n));
     }
@@ -64,10 +69,14 @@ public class RedisInventoryService {
 
     /** 占用 [start,end] 每天 1 辆，检查+扣减原子。 */
     public boolean occupy(Long storeId, Long carTypeId, LocalDate start, LocalDate end) {
+        //expand方法获取redis的key,把租期内每一天的 key 全部放进 keys 数组传给 Lua。
+        //expand里已循环生成key
         List<String> keys = expand(storeId, carTypeId, start, end);
+        //keys为空占用失败
         if (keys.isEmpty()) {
             return false;
         }
+        //keys不为空,  实现lua占用:检查+扣减原子 参数 need=1
         Long r = redis.execute(OCCUPY_SCRIPT, keys, "1");
         return r != null && r == 1L;
     }
@@ -83,8 +92,11 @@ public class RedisInventoryService {
 
     /** 从 order 表聚合真实占用，重算并覆盖 Redis 槽位（DB 为真相源，兜底重建）。 */
     public void rebuildFromDb(Long storeId, Long carTypeId) {
+        // 1. 查询：该门店+车型，总共有多少台实体车
         int n = carTypeMapper.countAvailable(storeId, carTypeId);
+        //2. 查询【有效占用订单】：未取消、未过期的活跃订单
         List<Order> active = orderMapper.selectActive(storeId, carTypeId);
+
         Map<LocalDate, Integer> occupied = new HashMap<>();
         for (Order o : active) {
             for (LocalDate d = o.getStartTime().toLocalDate(); !d.isAfter(o.getEndTime().toLocalDate()); d = d.plusDays(1)) {

@@ -25,7 +25,7 @@ public interface OrderMapper {
 
     /** 超时未支付订单：PENDING 且创建时间早于 N 分钟前，供定时任务兜底扫描。 */
     @Select("SELECT * FROM orders WHERE status = 'PENDING' " +
-            "AND create_time < DATE_SUB(NOW(), INTERVAL #{minutes} MINUTE)")
+            "AND create_time < DATE_SUB(NOW(), INTERVAL #{minutes} MINUTE)") //创建时间 < 当前时间往前推 N 分钟 → 也就是这个订单已经放了 N 分钟还没付款，超时了
     List<Order> selectTimeoutPending(@Param("minutes") int minutes);
 
     @Insert("INSERT INTO orders(order_no, user_id, store_id, car_type_id, start_time, end_time, status, " +

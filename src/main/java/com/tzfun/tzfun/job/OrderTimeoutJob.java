@@ -29,13 +29,18 @@ public class OrderTimeoutJob {
     @Value("${rocketmq.order.timeout-minutes}")
     private int timeoutMinutes;
 
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = 300000)//时间单位ms 5分钟
     public void scanTimeoutOrders() {
+        // 查询出所有PENDING 且超时 N 分钟的订单
         List<Order> orders = orderMapper.selectTimeoutPending(timeoutMinutes);
+        //  循环每一个超时的订单
         for (Order o : orders) {
             try {
+                //  超时的定时取消
+                //  调用取消订单方法：改状态、归还库存、发通知等
                 orderService.cancelTimeout(o.getId());
             } catch (Exception e) {
+                //  单个订单取消报错，只打日志，不抛异常、不中断循环
                 log.error("超时取消订单失败 orderId={}", o.getId(), e);
             }
         }

@@ -52,7 +52,7 @@ public class SeckillService {
             throw new CustomException("404", "秒杀券不存在或已下架");
         }
         LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(t.getClaimStart()) || now.isAfter(t.getClaimEnd())) {
+        if (now.isBefore(t.getClaimStart()) || now.isAfter(t.getClaimEnd())) {//活动时间开关
             throw new CustomException("400", "不在秒杀时间内");
         }
         // 初始化库存槽（不存在才设，值 = total_count）
@@ -62,7 +62,8 @@ public class SeckillService {
         if (r == null || r != 1L) {
             throw new CustomException("400", "该券已被抢完");
         }
-        // 预扣成功，发 MQ 异步落库；发送失败回滚预扣，避免库存被吞
+        //  预扣成功，发 MQ 异步落库；发送失败回滚预扣，避免库存被吞
+        //  生产者send:组装 Message：topic + body（`userId:templateId` 字符串）
         if (!mqProducer.send(seckillTopic, userId + ":" + templateId)) {
             rollbackStock(templateId);
             throw new CustomException("500", "系统繁忙，请重试");

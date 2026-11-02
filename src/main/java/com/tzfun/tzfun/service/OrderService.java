@@ -75,10 +75,13 @@ public class OrderService {
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
             inventoryService.initSlot(dto.getStoreId(), dto.getCarTypeId(), d, n);
         }
+        //核心：原子占用（扣库存）
+        //占用失败,直接抛异常,订单终止
         if (!inventoryService.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end)) {
             throw new CustomException("400", "该时段无车");
         }
 
+        //库存扣成功
         long days = ChronoUnit.DAYS.between(start, end) + 1;
         BigDecimal total = type.getDailyPrice().multiply(BigDecimal.valueOf(days));
 
@@ -94,12 +97,16 @@ public class OrderService {
         order.setDiscountAmount(BigDecimal.ZERO);
         order.setPayAmount(total);
 
+        //失败补偿(保证库存统一性)
+        //因为是先扣redis库存再落库,如果落库失败,会导致redis库存丢失一辆,落库失败执行失败补偿release回滚
         try {
             orderMapper.insert(order);
         } catch (Exception e) {
+            //DB失败补偿回滚
             inventoryService.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
             throw e;
         }
+        //mq
         mqProducer.send(timeoutTopic, String.valueOf(order.getId()), TIMEOUT_DELAY_LEVEL);
         return order;
     }
@@ -117,9 +124,11 @@ public class OrderService {
             throw new CustomException("400", "订单未确认，无法取车");
         }
         Car car = allocateCar(o.getStoreId(), o.getCarTypeId());
+        //推进状态  CONFIRMED→IN_USE
         try {
             changeStatus(orderId, OrderStatus.CONFIRMED, OrderStatus.IN_USE);
         } catch (CustomException e) {
+            // 状态推进失败补偿，把刚 markRented 的车退回在库
             carMapper.markAvailable(car.getId());
             throw e;
         }
@@ -133,13 +142,18 @@ public class OrderService {
         if (!OrderStatus.IN_USE.name().equals(o.getStatus())) {
             throw new CustomException("400", "订单非使用中，无法还车");
         }
+        // 算附加费
         BigDecimal extra = calcExtra(mileage, damaged);
+        //  IN_USE→RETURNED
         changeStatus(orderId, OrderStatus.IN_USE, OrderStatus.RETURNED);
+        //  还车 释放时间窗库存
         inventoryService.release(o.getStoreId(), o.getCarTypeId(),
                 o.getStartTime().toLocalDate(), o.getEndTime().toLocalDate());
+        //  车从"出租中"变回"在库"
         if (o.getCarId() != null) {
             carMapper.markAvailable(o.getCarId());
         }
+        //写还车信息 + 追加费
         orderMapper.fillReturn(orderId,
                 "里程:" + (mileage == null ? "-" : mileage) + " 车损:" + (Boolean.TRUE.equals(damaged) ? "是" : "否")
                         + " 额外费:" + extra,
@@ -160,11 +174,12 @@ public class OrderService {
     /** 超时未支付自动取消（MQ/定时任务，无登录态）：仅 PENDING 才处理，幂等。 */
     public void cancelTimeout(Long orderId) {
         Order o = orderMapper.selectById(orderId);
+        //订单为null 或 订单状态不为PENDING直接返回结束
         if (o == null || !OrderStatus.PENDING.name().equals(o.getStatus())) {
             return;
         }
         try {
-            doCancel(o);
+            doCancel(o);//changeStatus条件更新
         } catch (CustomException e) {
             // 并发下状态已被改（支付成功/已取消），条件更新冲突属正常，吞掉保证幂等
         }

@@ -48,7 +48,7 @@ public class SeckillCouponConsumer extends MqConsumerSupport {
         CouponTemplate t = couponTemplateMapper.selectById(templateId);
         if (t == null) {
             seckillService.rollbackStock(templateId); // 模板已删，回滚预扣
-            return;
+            return;//   回滚 Redis 预扣库存，直接 return，这条消息消费结束。
         }
 
         UserCoupon uc = new UserCoupon();
@@ -59,11 +59,13 @@ public class SeckillCouponConsumer extends MqConsumerSupport {
         try {
             userCouponMapper.insert(uc);
         } catch (DuplicateKeyException e) {
-            seckillService.rollbackStock(templateId); // 重复秒杀，唯一索引兜底，回滚预扣
+//          seckillService.rollbackStock(templateId);唯一索引已经说明前面成功一次了,再回滚会导致库存虚高,直接return
             return;
         }
+        //  条件更新,数据库层面的兜底防超发;   防止 Redis 和 DB 数据不一致
+        //update语句返回影响行数;   返回不是1，说明更新失败，比如已经领满了
         if (couponTemplateMapper.incrementClaimed(templateId) != 1) {
-            userCouponMapper.deleteById(uc.getId());
+            userCouponMapper.deleteById(uc.getId()); // 删掉刚插入的用户券
             seckillService.rollbackStock(templateId); // 已领完，回滚预扣
         }
     }
