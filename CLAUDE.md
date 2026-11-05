@@ -19,6 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ 模块1 用户认证：已完成（UserController/UserService/JwtUtil/LoginInterceptor/UserContext 等）。
 - ✅ 模块2 门店/车型/车辆：已完成（Store/CarType/Car 三表 CRUD + availableCount + UserContext.requireAdmin 鉴权）。✅ 模块3 时间窗库存(Redis+Lua)：已完成（RedisInventoryService + occupy/release.lua 原子占释 + /carType/available 选车 + rebuildFromDb 兜底 + 占位 orders 表）。✅ 模块4 订单状态机/下单/取还车（Order/OrderMapper/OrderService/OrderController/OrderStatus 状态机 + 下单占库存补偿 + 取还车 + 水平越权）→ ✅ 模块5 优惠券：已完成（CouponTemplate/UserCoupon 双表 + 领券先插唯一索引拦重复再条件更新 claimed_count 防超发 + useCoupon WHERE status=0 防复用 + calcDiscount DECIMAL 封顶不超订单额 + 过期 Job）→ ✅ 模块6 支付(mock)：已完成（PaymentController/PaymentService/PaymentMapper/Payment/PayNotifyDTO + handleNotify 幂等 out_trade_no 唯一+已支付直接 SUCCESS + 订单确认 WHERE status=PENDING + useCoupon 重复回调 try/catch 幂等忽略 + 金额 DECIMAL 比对订单权威值防篡改 + WebConfig 放行 /pay/notify)。
 - ✅ 阶段2（已完成）：RocketMQ 接入（原生 rocketmq-client 4.9.8 手动封装，不用 starter）+ 超时未支付自动释放库存（延迟消息 + 定时任务双保险）+ 优惠券秒杀（Redis Lua 预扣 + MQ 异步落库 + 唯一索引兜底）。Sentinel 限流后置未做。
+- 🔧 阶段3 微服务化 Spring Cloud：模块A 微服务骨架（已验收）、模块B 业务迁移+网关鉴权前移（已验收）均完成；**模块C 订单 Outbox 最终一致（代码完成，待用户运行期验收）**。CC 按 A→B→C→D 顺序实现（只写代码）；CI + SkyWalking 归用户（见模块E）。架构硬约束/代码约定同阶段1/2。
 - 每模块开始前先 `Read doc/TzFun阶段1-模块N-*.md`（阶段2 改读 doc/阶段2开场指令.md）。
 
 ## 项目结构速查（/clear 后靠此重建认知，禁止全项目扫描）

@@ -8,6 +8,7 @@ import org.apache.rocketmq.common.message.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
  * 超时消息失败有定时任务兜底；秒杀落库失败需调用方回滚 Redis 预扣。
  */
 @Component
+@ConditionalOnProperty(name = "rocketmq.name-server")
 public class MqProducer {
 
     private static final Logger log = LoggerFactory.getLogger(MqProducer.class);

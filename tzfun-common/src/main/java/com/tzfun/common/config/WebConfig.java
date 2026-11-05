@@ -19,6 +19,8 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(loginInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/user/login", "/user/register", "/pay/notify");
+                // login/register/notify 白名单；internal/inventory 为服务间 Feign 接口（无登录态，信任网关/服务间头）
+                .excludePathPatterns("/user/login", "/user/register", "/pay/notify",
+                        "/internal/**", "/inventory/**");
     }
 }

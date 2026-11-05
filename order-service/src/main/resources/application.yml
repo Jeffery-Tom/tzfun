@@ -8,3 +8,23 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848
+  datasource:
+    url: "jdbc:mysql://localhost:3306/tzfun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: tzfun-jwt-secret-key-please-change-me-32bytes-min
+  expire-ms: 86400000
+
+rocketmq:
+  name-server: localhost:9876
+  producer-group: tzfun-producer
+  order:
+    timeout-minutes: 15
+    timeout-topic: order-pay-timeout

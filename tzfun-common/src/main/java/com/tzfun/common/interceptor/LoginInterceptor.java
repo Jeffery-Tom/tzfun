@@ -22,6 +22,14 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 优先读网关下传的身份头（网关已校验 JWT 并覆盖写入，下游只信任该头）
+        String userIdHeader = request.getHeader("X-User-Id");
+        String roleHeader = request.getHeader("X-User-Role");
+        if (userIdHeader != null && !userIdHeader.isBlank() && roleHeader != null) {
+            UserContext.set(Long.valueOf(userIdHeader), roleHeader);
+            return true;
+        }
+        // 头缺失（未走网关直连调试）回退校验 Bearer
         String auth = request.getHeader("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) {
             throw new CustomException("401", "未登录");

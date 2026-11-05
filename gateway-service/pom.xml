@@ -25,5 +25,9 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-loadbalancer</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.tzfun</groupId>
+			<artifactId>tzfun-common</artifactId>
+		</dependency>
 	</dependencies>
 </project>

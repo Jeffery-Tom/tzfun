@@ -35,6 +35,12 @@
 			<artifactId>rocketmq-client</artifactId>
 			<optional>true</optional>
 		</dependency>
+		<!-- Feign（FeignAuthInterceptor 编译需要；optional，用 OpenFeign 的服务自行引） -->
+		<dependency>
+			<groupId>io.github.openfeign</groupId>
+			<artifactId>feign-core</artifactId>
+			<optional>true</optional>
+		</dependency>
 		<!-- JWT（可传递，网关与业务服务都要用） -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>

@@ -52,6 +52,12 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- 内部公共模块版本管理 -->
+			<dependency>
+				<groupId>com.tzfun</groupId>
+				<artifactId>tzfun-common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<!-- 第三方版本统一管理 -->
 			<dependency>
 				<groupId>org.mybatis.spring.boot</groupId>
@@ -80,6 +86,15 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
+	<dependencies>
+		<!-- Lombok：所有模块编译实体/DTO/VO 需要，统一继承（编译期注解，运行时已排除） -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<pluginManagement>

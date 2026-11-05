@@ -42,3 +42,7 @@ spring:
                 - Path=/payment-service/**
               filters:
                 - StripPrefix=1
+
+jwt:
+  secret: tzfun-jwt-secret-key-please-change-me-32bytes-min
+  expire-ms: 86400000
