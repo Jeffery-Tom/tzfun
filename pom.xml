@@ -11,119 +11,103 @@
 	<groupId>com.tzfun</groupId>
 	<artifactId>TzFun</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
 	<name>TzFun</name>
-	<description>TzFun 租车平台</description>
+	<description>TzFun 租车平台（微服务拆分）</description>
 
 	<properties>
 		<java.version>21</java.version>
+		<spring-cloud.version>2025.1.3</spring-cloud.version>
+		<mybatis.version>4.1.0</mybatis.version>
+		<jjwt.version>0.12.6</jjwt.version>
+		<rocketmq.version>4.9.8</rocketmq.version>
 	</properties>
 
-	<dependencies>
-		<!-- Web MVC -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc</artifactId>
-		</dependency>
+	<modules>
+		<module>tzfun-common</module>
+		<module>eureka-server</module>
+		<module>user-service</module>
+		<module>car-service</module>
+		<module>order-service</module>
+		<module>coupon-service</module>
+		<module>payment-service</module>
+		<module>gateway-service</module>
+	</modules>
 
-		<!-- 参数校验 @Valid -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-validation</artifactId>
-		</dependency>
-
-		<!-- MySQL 驱动 -->
-		<dependency>
-			<groupId>com.mysql</groupId>
-			<artifactId>mysql-connector-j</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-
-		<!-- MyBatis -->
-		<dependency>
-			<groupId>org.mybatis.spring.boot</groupId>
-			<artifactId>mybatis-spring-boot-starter</artifactId>
-			<version>4.1.0</version>
-		</dependency>
-
-		<!-- Redis（时间窗库存，Lettuce 客户端内置） -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-redis</artifactId>
-		</dependency>
-
-		<!-- JWT -->
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-api</artifactId>
-			<version>0.12.6</version>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-impl</artifactId>
-			<version>0.12.6</version>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-jackson</artifactId>
-			<version>0.12.6</version>
-			<scope>runtime</scope>
-		</dependency>
-
-		<!-- BCrypt（只用 crypto，不引入完整 Spring Security） -->
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-crypto</artifactId>
-		</dependency>
-
-		<!-- RocketMQ（阶段2：异步化/超时释放/秒杀落库，原生客户端连 5.x broker 的 remoting 协议） -->
-		<dependency>
-			<groupId>org.apache.rocketmq</groupId>
-			<artifactId>rocketmq-client</artifactId>
-			<version>4.9.8</version>
-		</dependency>
-
-		<!-- Lombok -->
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<optional>true</optional>
-		</dependency>
-
-		<!-- 测试 -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<!-- Spring Cloud BOM（2025.1.x 对应 Boot 4.1.x） -->
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<!-- 第三方版本统一管理 -->
+			<dependency>
+				<groupId>org.mybatis.spring.boot</groupId>
+				<artifactId>mybatis-spring-boot-starter</artifactId>
+				<version>${mybatis.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-api</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-impl</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.jsonwebtoken</groupId>
+				<artifactId>jjwt-jackson</artifactId>
+				<version>${jjwt.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.rocketmq</groupId>
+				<artifactId>rocketmq-client</artifactId>
+				<version>${rocketmq.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+					<configuration>
+						<excludes>
+							<exclude>
+								<groupId>org.projectlombok</groupId>
+								<artifactId>lombok</artifactId>
+							</exclude>
+						</excludes>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<configuration>
+						<encoding>UTF-8</encoding>
+						<annotationProcessorPaths>
+							<path>
+								<groupId>org.projectlombok</groupId>
+								<artifactId>lombok</artifactId>
+							</path>
+						</annotationProcessorPaths>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 		<plugins>
+			<!-- 可执行 jar：所有可运行模块继承；common 模块在其 pom 里 skip -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<excludes>
-						<exclude>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</exclude>
-					</excludes>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<encoding>UTF-8</encoding>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</path>
-					</annotationProcessorPaths>
-				</configuration>
 			</plugin>
 		</plugins>
 	</build>
