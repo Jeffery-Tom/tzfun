@@ -5,6 +5,9 @@ spring:
   application:
     name: gateway-service
   cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
     gateway:
       server:
         webflux:
@@ -39,8 +42,3 @@ spring:
                 - Path=/payment-service/**
               filters:
                 - StripPrefix=1
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
