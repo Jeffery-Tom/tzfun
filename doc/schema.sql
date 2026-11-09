@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS store (
     address VARCHAR(255) COMMENT '地址',
     lng DECIMAL(10,7) COMMENT '经度',
     lat DECIMAL(10,7) COMMENT '纬度',
-    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_city_id (city, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门店';
 
 CREATE TABLE IF NOT EXISTS car_type (
@@ -46,8 +47,7 @@ CREATE TABLE IF NOT EXISTS car (
     status VARCHAR(20) NOT NULL DEFAULT '在库' COMMENT '在库/出租中/维护',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_plate_no (plate_no),
-    KEY idx_store (store_id),
-    KEY idx_car_type (car_type_id)
+    KEY idx_store_type_status (store_id, car_type_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='车辆';
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS orders (
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_user (user_id),
-    KEY idx_store_type (store_id, car_type_id)
+    KEY idx_store_type (store_id, car_type_id),
+    KEY idx_status_create (status, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单';
 
 CREATE TABLE IF NOT EXISTS coupon_template (
@@ -102,7 +103,9 @@ CREATE TABLE IF NOT EXISTS user_coupon (
     use_order_id BIGINT DEFAULT NULL COMMENT '使用的订单id',
     expire_time DATETIME NOT NULL COMMENT '过期时间(取模板use_end)',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_template (user_id, template_id)
+    UNIQUE KEY uk_user_template (user_id, template_id),
+    KEY idx_user_status_id (user_id, status, id DESC),
+    KEY idx_status_expire (status, expire_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户券包';
 
 CREATE TABLE IF NOT EXISTS payment (
