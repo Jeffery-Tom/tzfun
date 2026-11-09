@@ -1,0 +1,22 @@
+# 本地一键起 SkyWalking（OAP 后端 + UI），用于阶段3 模块E 链路追踪演示。
+# 用法：在项目根目录执行  docker compose -f docker-compose.skywalking.yml up -d
+# 起好后：UI 在 http://localhost:8080 ，agent 上报地址 127.0.0.1:11800
+services:
+  oap:
+    image: apache/skywalking-oap-server:10.1.0
+    container_name: tzfun-skywalking-oap
+    environment:
+      SW_STORAGE: h2 # 本地演示用内置 H2，重启即丢；要持久化改 elasticsearch
+    ports:
+      - "11800:11800" # gRPC：agent 上报链路数据
+      - "12800:12800" # HTTP：UI 查询接口
+
+  ui:
+    image: apache/skywalking-ui:10.1.0
+    container_name: tzfun-skywalking-ui
+    depends_on:
+      - oap
+    environment:
+      SW_OAP_ADDRESS: http://oap:12800
+    ports:
+      - "8080:8080"

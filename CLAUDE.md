@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ 模块1 用户认证：已完成（UserController/UserService/JwtUtil/LoginInterceptor/UserContext 等）。
 - ✅ 模块2 门店/车型/车辆：已完成（Store/CarType/Car 三表 CRUD + availableCount + UserContext.requireAdmin 鉴权）。✅ 模块3 时间窗库存(Redis+Lua)：已完成（RedisInventoryService + occupy/release.lua 原子占释 + /carType/available 选车 + rebuildFromDb 兜底 + 占位 orders 表）。✅ 模块4 订单状态机/下单/取还车（Order/OrderMapper/OrderService/OrderController/OrderStatus 状态机 + 下单占库存补偿 + 取还车 + 水平越权）→ ✅ 模块5 优惠券：已完成（CouponTemplate/UserCoupon 双表 + 领券先插唯一索引拦重复再条件更新 claimed_count 防超发 + useCoupon WHERE status=0 防复用 + calcDiscount DECIMAL 封顶不超订单额 + 过期 Job）→ ✅ 模块6 支付(mock)：已完成（PaymentController/PaymentService/PaymentMapper/Payment/PayNotifyDTO + handleNotify 幂等 out_trade_no 唯一+已支付直接 SUCCESS + 订单确认 WHERE status=PENDING + useCoupon 重复回调 try/catch 幂等忽略 + 金额 DECIMAL 比对订单权威值防篡改 + WebConfig 放行 /pay/notify)。
 - ✅ 阶段2（已完成）：RocketMQ 接入（原生 rocketmq-client 4.9.8 手动封装，不用 starter）+ 超时未支付自动释放库存（延迟消息 + 定时任务双保险）+ 优惠券秒杀（Redis Lua 预扣 + MQ 异步落库 + 唯一索引兜底）。Sentinel 限流后置未做。
-- 🔧 阶段3 微服务化 Spring Cloud：模块A 微服务骨架（已验收）、模块B 业务迁移+网关鉴权前移（已验收）均完成；**模块C 订单 Outbox 最终一致（代码完成，待用户运行期验收）**。CC 按 A→B→C→D 顺序实现（只写代码）；CI + SkyWalking 归用户（见模块E）。架构硬约束/代码约定同阶段1/2。
+- 🔧 阶段3 微服务化 Spring Cloud：模块A 微服务骨架（已验收）、模块B 业务迁移+网关鉴权前移（已验收）均完成；**模块C 订单 Outbox 最终一致（代码完成，运行期三坑已修复：Jackson3包名/@MapperScan多模块漏扫/outbox_event建表，待用户完整验链路）；模块D 秒杀库存分段+限流（代码完成，Sentinel限流已用上未降级，待用户运行期验：200并发零超发/10段key分摊/限流生效）**。CC 按 A→B→C→D 顺序实现（只写代码）；CI + SkyWalking 归用户（见模块E）。架构硬约束/代码约定同阶段1/2。
 - 每模块开始前先 `Read doc/TzFun阶段1-模块N-*.md`（阶段2 改读 doc/阶段2开场指令.md）。
 
 ## 项目结构速查（/clear 后靠此重建认知，禁止全项目扫描）
@@ -60,6 +60,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 优惠券：领券 `UPDATE ... WHERE claimed_count<total_count` + 行数判断；用券 `WHERE status=0` 条件更新；抵扣 BigDecimal（详见 doc/模块5）。
 - 订单状态机：合法流转表 + `UPDATE ... WHERE status=old` 条件更新（详见 doc/模块4）。
 - 支付(mock)：异步回调 `out_trade_no` 唯一 + 已支付直接返回 SUCCESS = 幂等（详见 doc/模块6）。
+- **Jackson 必须用 3.x（`tools.jackson.*` 包名）**：Spring Boot 4.1.2 自带 Jackson 3，包名已从 `com.fasterxml.jackson.*` 改为 `tools.jackson.*`。注入 `ObjectMapper`/`JsonNode` 必须使用 `tools.jackson.databind.*`；若误用 `com.fasterxml.jackson`，**编译能过但启动报 "bean of type com.fasterxml.jackson.databind.ObjectMapper could not be found"**（容器只注册了 tools.jackson 类型的 bean）。jjwt 内部仍用 jackson 2，勿动。
+- **MyBatis 多模块：`@MapperScan` 必须显式包含 common 里的 mapper 包**：一旦启动类写了 `@MapperScan("com.tzfun.x.mapper")`，MyBatis 就只扫这个包、不再自动识别 `@Mapper` 注解接口。common 模块里的 mapper（如 `com.tzfun.common.outbox.OutboxMapper`）需在用到它的服务的 `@MapperScan` 里追加该包，例如 `@MapperScan({"com.tzfun.order.mapper","com.tzfun.common.outbox"})`，否则启动报 "bean of type ...Mapper could not be found"。
 
 ## 明确不做（避免过度设计）
 
