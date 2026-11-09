@@ -44,10 +44,11 @@ public class SeckillCouponConsumer extends MqConsumerSupport {
         String[] parts = body.split(":");
         Long userId = Long.valueOf(parts[0]);
         Long templateId = Long.valueOf(parts[1]);
+        int seg = Integer.parseInt(parts[2]);
 
         CouponTemplate t = couponTemplateMapper.selectById(templateId);
         if (t == null) {
-            seckillService.rollbackStock(templateId); // 模板已删，回滚预扣
+            seckillService.rollbackStock(templateId, seg); // 模板已删，回滚预扣
             return;//   回滚 Redis 预扣库存，直接 return，这条消息消费结束。
         }
 
@@ -66,7 +67,7 @@ public class SeckillCouponConsumer extends MqConsumerSupport {
         //update语句返回影响行数;   返回不是1，说明更新失败，比如已经领满了
         if (couponTemplateMapper.incrementClaimed(templateId) != 1) {
             userCouponMapper.deleteById(uc.getId()); // 删掉刚插入的用户券
-            seckillService.rollbackStock(templateId); // 已领完，回滚预扣
+            seckillService.rollbackStock(templateId, seg); // 已领完，回滚预扣
         }
     }
 

@@ -1,5 +1,7 @@
 package com.tzfun.coupon.service;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.tzfun.common.CustomException;
 import com.tzfun.common.mq.MqProducer;
 import com.tzfun.coupon.entity.CouponTemplate;
@@ -12,14 +14,18 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 优惠券秒杀：Redis Lua 预扣（防超卖）+ MQ 异步落库（唯一索引兜底）。
- * 库存原子性在 Redis+Lua，MQ 只做异步/削峰；落库失败回滚预扣。
+ * 优惠券秒杀：库存分段(10 段) + Redis Lua 预扣(防超卖) + MQ 异步落库(唯一索引兜底)。
+ * 分段打散 Redis 单 key 热点；落库失败按段号回滚预扣。
  */
 @Service
 public class SeckillService {
+
+    /** 库存分段数。 */
+    private static final int SEG = 10;
 
     @Resource
     private StringRedisTemplate redis;
@@ -31,20 +37,26 @@ public class SeckillService {
     @Value("${rocketmq.coupon.seckill-topic}")
     private String seckillTopic;
 
-    private static final DefaultRedisScript<Long> SECKILL_SCRIPT = load();
+    private static final DefaultRedisScript<Long> SECKILL_SCRIPT = load("lua/seckill_stock.lua");
+    private static final DefaultRedisScript<Long> INIT_SCRIPT = load("lua/seckill_init.lua");
 
-    private static DefaultRedisScript<Long> load() {
+    private static DefaultRedisScript<Long> load(String path) {
         DefaultRedisScript<Long> script = new DefaultRedisScript<>();
-        script.setLocation(new ClassPathResource("lua/seckill_stock.lua"));
+        script.setLocation(new ClassPathResource(path));
         script.setResultType(Long.class);
         return script;
     }
 
-    private String stockKey(Long templateId) {
-        return "seckill:stock:" + templateId;
+    private String stockKey(Long templateId, int seg) {
+        return "seckill:stock:" + templateId + ":" + seg;
     }
 
-    /** 秒杀入口：校验 -> Redis 预扣 -> 发 MQ 异步落库。返回成功仅代表已受理，最终结果以卡包为准。 */
+    private String initKey(Long templateId) {
+        return "seckill:stock:" + templateId + ":init";
+    }
+
+    /** 秒杀入口：校验 -> 初始化分段库存 -> 轮询分段预扣 -> 发 MQ 异步落库。返回成功仅代表已受理。 */
+    @SentinelResource(value = "seckill", blockHandler = "seckillBlock")
     public void seckill(Long templateId, Long userId) {
         CouponTemplate t = couponTemplateMapper.selectById(templateId);
         if (t == null || t.getSeckill() == null || t.getSeckill() != 1
@@ -52,26 +64,53 @@ public class SeckillService {
             throw new CustomException("404", "秒杀券不存在或已下架");
         }
         LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(t.getClaimStart()) || now.isAfter(t.getClaimEnd())) {//活动时间开关
+        if (now.isBefore(t.getClaimStart()) || now.isAfter(t.getClaimEnd())) {
             throw new CustomException("400", "不在秒杀时间内");
         }
-        // 初始化库存槽（不存在才设，值 = total_count）
-        redis.opsForValue().setIfAbsent(stockKey(templateId), String.valueOf(t.getTotalCount()));
-        // Lua 原子预扣：cur >= 1 才 DECRBY
-        Long r = redis.execute(SECKILL_SCRIPT, List.of(stockKey(templateId)));
-        if (r == null || r != 1L) {
+        initStock(templateId, t.getTotalCount());
+
+        // 按用户 hash 选段，段空则轮询下一段，最多 SEG 次；全空才判售罄
+        int seg = Math.floorMod(userId.hashCode(), SEG);
+        int successSeg = -1;
+        for (int i = 0; i < SEG; i++) {
+            int cur = (seg + i) % SEG;
+            Long r = redis.execute(SECKILL_SCRIPT, List.of(stockKey(templateId, cur)));
+            if (r != null && r == 1L) {
+                successSeg = cur;
+                break;
+            }
+        }
+        if (successSeg < 0) {
             throw new CustomException("400", "该券已被抢完");
         }
-        //  预扣成功，发 MQ 异步落库；发送失败回滚预扣，避免库存被吞
-        //  生产者send:组装 Message：topic + body（`userId:templateId` 字符串）
-        if (!mqProducer.send(seckillTopic, userId + ":" + templateId)) {
-            rollbackStock(templateId);
+        // 预扣成功，发 MQ 异步落库；发送失败按段回滚，避免库存被吞
+        if (!mqProducer.send(seckillTopic, userId + ":" + templateId + ":" + successSeg)) {
+            rollbackStock(templateId, successSeg);
             throw new CustomException("500", "系统繁忙，请重试");
         }
     }
 
-    /** 回滚预扣：INCRBY +1（供发送失败/落库失败时退回）。 */
-    public void rollbackStock(Long templateId) {
-        redis.opsForValue().increment(stockKey(templateId), 1);
+    /** Sentinel 限流兜底：超 QPS 阈值快速失败。 */
+    public void seckillBlock(Long templateId, Long userId, BlockException ex) {
+        throw new CustomException("429", "秒杀太火爆，请稍后再试");
+    }
+
+    /** 初始化 10 段库存（Lua 原子，余数分摊到前几段，保证总和=总量）。 */
+    private void initStock(Long templateId, int totalCount) {
+        int base = totalCount / SEG;
+        int rem = totalCount % SEG;
+        List<String> keys = new ArrayList<>(SEG + 1);
+        List<String> args = new ArrayList<>(SEG);
+        for (int seg = 0; seg < SEG; seg++) {
+            keys.add(stockKey(templateId, seg));
+            args.add(String.valueOf(seg < rem ? base + 1 : base));
+        }
+        keys.add(initKey(templateId));
+        redis.execute(INIT_SCRIPT, keys, args.toArray());
+    }
+
+    /** 回滚预扣：INCRBY +1（供发送失败/落库失败时退回，精确到段）。 */
+    public void rollbackStock(Long templateId, int seg) {
+        redis.opsForValue().increment(stockKey(templateId, seg), 1);
     }
 }

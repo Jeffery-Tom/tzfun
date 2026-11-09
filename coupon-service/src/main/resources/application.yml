@@ -8,6 +8,10 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848
+    sentinel:
+      # 只保留 @SentinelResource 精准限流，关闭全局 web 拦截（规避 SB4 下 servlet 兼容风险）
+      filter:
+        enabled: false
   datasource:
     url: "jdbc:mysql://localhost:3306/tzfun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
     username: root
@@ -31,3 +35,6 @@ rocketmq:
   producer-group: tzfun-producer
   coupon:
     seckill-topic: coupon-seckill
+
+sentinel:
+  seckill-qps: 300
