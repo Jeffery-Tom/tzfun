@@ -62,6 +62,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 支付(mock)：异步回调 `out_trade_no` 唯一 + 已支付直接返回 SUCCESS = 幂等（详见 doc/模块6）。
 - **Jackson 必须用 3.x（`tools.jackson.*` 包名）**：Spring Boot 4.1.2 自带 Jackson 3，包名已从 `com.fasterxml.jackson.*` 改为 `tools.jackson.*`。注入 `ObjectMapper`/`JsonNode` 必须使用 `tools.jackson.databind.*`；若误用 `com.fasterxml.jackson`，**编译能过但启动报 "bean of type com.fasterxml.jackson.databind.ObjectMapper could not be found"**（容器只注册了 tools.jackson 类型的 bean）。jjwt 内部仍用 jackson 2，勿动。
 - **MyBatis 多模块：`@MapperScan` 必须显式包含 common 里的 mapper 包**：一旦启动类写了 `@MapperScan("com.tzfun.x.mapper")`，MyBatis 就只扫这个包、不再自动识别 `@Mapper` 注解接口。common 模块里的 mapper（如 `com.tzfun.common.outbox.OutboxMapper`）需在用到它的服务的 `@MapperScan` 里追加该包，例如 `@MapperScan({"com.tzfun.order.mapper","com.tzfun.common.outbox"})`，否则启动报 "bean of type ...Mapper could not be found"。
+- **单元测试约定（CI 跑 `mvn -B clean verify`，各模块已补测试）**：① 测试用 **JUnit 6**（`org.junit.jupiter.api.*`，SB4.1.2 托管 jupiter 6.0.3）；② 因 SB 强制 junit 6.0.3 与 `mockito-junit-jupiter:5.23.0`（声明依赖 junit 5.13.4）版本错配，**禁止用 `@ExtendWith(MockitoExtension.class)`**，统一用 `MockitoAnnotations.openMocks(this)` 驱动 `@Mock/@InjectMocks`（与 JUnit 版本无关）；③ 写测试加 `spring-boot-starter-test`（test 作用域，版本由父工程托管）；④ 纯逻辑/Service 层测试用 Mockito 注入依赖，**不要**用 `@SpringBootTest`（会拉起 Spring 上下文，需要 Nacos/Redis 等，CI 环境跑不起来）；⑤ WebFlux 网关过滤器用 `MockServerWebExchange`/`MockServerHttpRequest`（包 `org.springframework.mock.web.server` / `org.springframework.mock.http.server.reactive`）测试，不要启动 Gateway。
 
 ## 明确不做（避免过度设计）
 

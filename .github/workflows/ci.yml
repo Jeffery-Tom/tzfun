@@ -21,6 +21,6 @@ jobs:
           cache: "maven" # 自动缓存 ~/.m2，等价于手动 actions/cache
 
       - name: Build with Maven
-        # 当前微服务模块无 src/test，CI 仅保证可编译可打包（不依赖中间件）。
-        # 将来补了单元测试可改成 `mvn -B verify`（会跑 test）。
-        run: mvn -B clean compile
+        # clean verify = 编译 + 跑单元测试（各模块已补 JwtUtil/网关鉴权/订单 Outbox/用户登录/秒杀分段 单元测试）。
+        # 单元测试用 Mockito 注入依赖，不依赖 Nacos/Redis/RocketMQ/MySQL，CI 环境可直接跑绿。
+        run: mvn -B clean verify
