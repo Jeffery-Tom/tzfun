@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 @EnableFeignClients(basePackages = "com.tzfun.order.feign")
-@MapperScan("com.tzfun.order.mapper")
+@MapperScan({"com.tzfun.order.mapper", "com.tzfun.common.outbox"})
 @ComponentScan(basePackages = {"com.tzfun.order", "com.tzfun.common"})
 public class OrderServiceApplication {
 

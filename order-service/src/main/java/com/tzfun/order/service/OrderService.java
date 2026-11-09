@@ -17,7 +17,8 @@ import com.tzfun.order.mapper.CarMapper;
 import com.tzfun.order.mapper.CarTypeMapper;
 import com.tzfun.order.mapper.OrderMapper;
 import com.tzfun.order.mapper.StoreMapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

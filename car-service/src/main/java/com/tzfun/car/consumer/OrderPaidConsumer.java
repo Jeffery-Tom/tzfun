@@ -1,7 +1,7 @@
 package com.tzfun.car.consumer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.tzfun.car.service.RedisInventoryService;
 import com.tzfun.common.mq.MqConsumerSupport;
 import jakarta.annotation.PostConstruct;
