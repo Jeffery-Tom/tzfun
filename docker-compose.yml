@@ -1,0 +1,58 @@
+# TzFun 基础设施-only：只起 Redis / Nacos / RocketMQ
+# 应用服务在你本机跑（mvn spring-boot:run 或 IDE），直接连 localhost 上的 MySQL/Redis/Nacos/MQ。
+# 因为应用连的是本机 localhost:3306，等于直接复用你本机 MySQL 里的 tzfun 老数据（方案 A 效果，零改配置）。
+# 启动：docker compose up -d
+# 只起某几个：docker compose up -d redis nacos rocketmq-namesrv rocketmq-broker
+
+services:
+  redis:
+    image: redis:7
+    container_name: tzfun-redis
+    ports:
+      - "6379:6379"            # 本机应用 localhost:6379 直连
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  nacos:
+    image: nacos/nacos-server:v2.5.1
+    container_name: tzfun-nacos
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMX: 512m
+      JVM_XMS: 512m
+    ports:
+      - "8848:8848"            # Nacos 控制台 http://localhost:8848/nacos
+      - "9848:9848"            # Nacos gRPC 端口（nacos-client 2.x/3.x 注册发现必走，必须映射）
+    restart: on-failure
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.1
+    container_name: tzfun-rocketmq-namesrv
+    command: ["sh", "mqnamesrv"]
+    environment:
+      JAVA_OPT: "-Xms256m -Xmx256m -Xmn128m"
+    ports:
+      - "9876:9876"
+    restart: on-failure
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.1
+    container_name: tzfun-rocketmq-broker
+    command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/broker.conf"]
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      # 应用在本机、broker 在容器：让 broker 向 namesrv 注册一个"宿主机能到达"的地址
+      JAVA_OPT: "-Xms512m -Xmx512m -Xmn256m"
+    volumes:
+      - ./docker/broker.conf:/home/rocketmq/broker.conf:ro
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+      - "10912:10912"
+    depends_on: [rocketmq-namesrv]
+    restart: on-failure
