@@ -22,6 +22,7 @@
 		<mybatis.version>4.1.0</mybatis.version>
 		<jjwt.version>0.12.6</jjwt.version>
 		<rocketmq.version>4.9.8</rocketmq.version>
+		<redisson.version>3.40.0</redisson.version>
 	</properties>
 
 	<modules>
@@ -83,6 +84,11 @@
 				<groupId>org.apache.rocketmq</groupId>
 				<artifactId>rocketmq-client</artifactId>
 				<version>${rocketmq.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.redisson</groupId>
+				<artifactId>redisson</artifactId>
+				<version>${redisson.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

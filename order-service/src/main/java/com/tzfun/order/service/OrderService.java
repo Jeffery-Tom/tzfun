@@ -18,6 +18,8 @@ import com.tzfun.order.mapper.CarTypeMapper;
 import com.tzfun.order.mapper.OrderMapper;
 import com.tzfun.order.mapper.StoreMapper;
 import tools.jackson.databind.ObjectMapper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,11 +27,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 订单：下单链路 + 状态机 + 取还车。
@@ -40,6 +46,15 @@ public class OrderService {
     private static final int FREE_MILEAGE = 200;
     private static final BigDecimal OVER_MILEAGE_FEE = new BigDecimal("2");
     private static final BigDecimal DAMAGE_FEE = new BigDecimal("200");
+
+    /** 超时宽限分钟数。 */
+    private static final int OVERTIME_GRACE_MINUTES = 60;
+    /** 超时费率：按日租金的 1.5 倍折算。 */
+    private static final BigDecimal OVERTIME_RATE = new BigDecimal("1.5");
+    /** 超时超过该小时数加收违约金。 */
+    private static final int OVERTIME_PENALTY_HOURS = 24;
+    /** 违约金 = 3 天日租金。 */
+    private static final BigDecimal PENALTY_DAYS = new BigDecimal("3");
 
     /** RocketMQ 延迟等级 15 = 20 分钟（4.x 固定 18 级，无精确 15 分钟档，精确释放靠定时任务兜底）。 */
     private static final int TIMEOUT_DELAY_LEVEL = 15;
@@ -62,11 +77,13 @@ public class OrderService {
     private OutboxMapper outboxMapper;
     @Resource
     private ObjectMapper objectMapper;
+    @Resource
+    private RedissonClient redissonClient;
 
     @Value("${rocketmq.order.timeout-topic}")
     private String timeoutTopic;
 
-    /** 下单：校验 -> 占库存(Feign car) -> 算钱 -> 落库；占库存后落库失败须 release 补偿。 */
+    /** 下单：校验 -> 分布式锁防重复 -> 占库存(Feign car) -> 算钱 -> 落库；占库存后落库失败须 release 补偿。 */
     public Order createOrder(OrderDTO dto) {
         Long userId = UserContext.getUserId();
         if (!dto.getStartTime().isBefore(dto.getEndTime())) {
@@ -80,40 +97,63 @@ public class OrderService {
             throw new CustomException("404", "门店不存在");
         }
 
-        LocalDate start = dto.getStartTime().toLocalDate();
-        LocalDate end = dto.getEndTime().toLocalDate();
-        // 原子占库存：Feign 调 car-service，car 内部 countAvailable + initSlot + Lua
-        Result<Boolean> occupyR = carServiceClient.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end);
-        if (occupyR == null || !"200".equals(occupyR.getCode()) || !Boolean.TRUE.equals(occupyR.getData())) {
-            throw new CustomException("400", "该时段无车");
-        }
-
-        // 库存扣成功
-        long days = ChronoUnit.DAYS.between(start, end) + 1;
-        BigDecimal total = type.getDailyPrice().multiply(BigDecimal.valueOf(days));
-
-        Order order = new Order();
-        order.setOrderNo(genOrderNo());
-        order.setUserId(userId);
-        order.setStoreId(dto.getStoreId());
-        order.setCarTypeId(dto.getCarTypeId());
-        order.setStartTime(dto.getStartTime());
-        order.setEndTime(dto.getEndTime());
-        order.setStatus(OrderStatus.PENDING.name());
-        order.setTotalAmount(total);
-        order.setDiscountAmount(BigDecimal.ZERO);
-        order.setPayAmount(total);
-
-        // 失败补偿：先扣库存再落库，落库失败须 release 回滚
+        // Redisson 锁：串行化同一用户下单，锁内查重，防并发重复下单
+        RLock lock = redissonClient.getLock("order:create:" + userId);
+        boolean locked;
         try {
-            orderMapper.insert(order);
-        } catch (Exception e) {
-            carServiceClient.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
-            throw e;
+            locked = lock.tryLock(3, 30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CustomException("500", "系统繁忙，请重试");
         }
-        // 超时未支付延迟释放
-        mqProducer.send(timeoutTopic, String.valueOf(order.getId()), TIMEOUT_DELAY_LEVEL);
-        return order;
+        if (!locked) {
+            throw new CustomException("429", "操作过于频繁，请稍后重试");
+        }
+        try {
+            // 锁内查重：同用户同车型、时间窗重叠的进行中订单
+            if (!orderMapper.selectOverlap(userId, dto.getCarTypeId(), dto.getStartTime(), dto.getEndTime()).isEmpty()) {
+                throw new CustomException("400", "该时段已有相同车型的订单");
+            }
+
+            LocalDate start = dto.getStartTime().toLocalDate();
+            LocalDate end = dto.getEndTime().toLocalDate();
+            // 原子占库存：Feign 调 car-service，car 内部 countAvailable + initSlot + Lua
+            Result<Boolean> occupyR = carServiceClient.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end);
+            if (occupyR == null || !"200".equals(occupyR.getCode()) || !Boolean.TRUE.equals(occupyR.getData())) {
+                throw new CustomException("400", "该时段无车");
+            }
+
+            // 库存扣成功
+            long days = ChronoUnit.DAYS.between(start, end) + 1;
+            BigDecimal total = type.getDailyPrice().multiply(BigDecimal.valueOf(days));
+
+            Order order = new Order();
+            order.setOrderNo(genOrderNo());
+            order.setUserId(userId);
+            order.setStoreId(dto.getStoreId());
+            order.setCarTypeId(dto.getCarTypeId());
+            order.setStartTime(dto.getStartTime());
+            order.setEndTime(dto.getEndTime());
+            order.setStatus(OrderStatus.PENDING.name());
+            order.setTotalAmount(total);
+            order.setDiscountAmount(BigDecimal.ZERO);
+            order.setPayAmount(total);
+
+            // 失败补偿：先扣库存再落库，落库失败须 release 回滚
+            try {
+                orderMapper.insert(order);
+            } catch (Exception e) {
+                carServiceClient.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
+                throw e;
+            }
+            // 超时未支付延迟释放
+            mqProducer.send(timeoutTopic, String.valueOf(order.getId()), TIMEOUT_DELAY_LEVEL);
+            return order;
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
     }
 
     /** 确认（mock 支付确认）：PENDING -> CONFIRMED。 */
@@ -177,14 +217,15 @@ public class OrderService {
                 "车牌:" + car.getPlateNo() + " 里程:0 油表:满 外观:完好");
     }
 
-    /** 还车：算超里程/车损 mock 费 + 回写还车信息，IN_USE -> RETURNED。 */
+    /** 还车：算超里程/车损/超时 mock 费 + 回写还车信息，IN_USE -> RETURNED。 */
     public void returnCar(Long orderId, Integer mileage, Boolean damaged) {
         Order o = getOwnedOrder(orderId);
         if (!OrderStatus.IN_USE.name().equals(o.getStatus())) {
             throw new CustomException("400", "订单非使用中，无法还车");
         }
-        // 算附加费
-        BigDecimal extra = calcExtra(mileage, damaged);
+        // 算附加费（超里程 + 车损 + 超时/违约金）
+        BigDecimal overtime = calcOvertime(o);
+        BigDecimal extra = calcExtra(mileage, damaged).add(overtime);
         //  IN_USE→RETURNED
         changeStatus(orderId, OrderStatus.IN_USE, OrderStatus.RETURNED);
         //  还车 释放时间窗库存（Feign car）
@@ -197,7 +238,7 @@ public class OrderService {
         // 写还车信息 + 追加费
         orderMapper.fillReturn(orderId,
                 "里程:" + (mileage == null ? "-" : mileage) + " 车损:" + (Boolean.TRUE.equals(damaged) ? "是" : "否")
-                        + " 额外费:" + extra,
+                        + " 超时费:" + overtime + " 额外费:" + extra,
                 extra);
     }
 
@@ -283,6 +324,29 @@ public class OrderService {
             extra = extra.add(DAMAGE_FEE);
         }
         return extra;
+    }
+
+    /** 超时费/违约金：晚于约定还车时间，宽限 60 分钟；超时按小时计（日租金 1.5 倍折算），超 24h 加违约金。 */
+    private BigDecimal calcOvertime(Order o) {
+        LocalDateTime now = LocalDateTime.now();
+        if (!now.isAfter(o.getEndTime())) {
+            return BigDecimal.ZERO;
+        }
+        long minutes = ChronoUnit.MINUTES.between(o.getEndTime(), now);
+        if (minutes <= OVERTIME_GRACE_MINUTES) {
+            return BigDecimal.ZERO;
+        }
+        long overtimeHours = (long) Math.ceil((minutes - OVERTIME_GRACE_MINUTES) / 60.0);
+        CarType type = carTypeMapper.selectById(o.getCarTypeId());
+        BigDecimal dailyPrice = type == null ? BigDecimal.ZERO : type.getDailyPrice();
+        // 超时费 = 日租金 * 1.5 * 小时数 / 24（保留 2 位，四舍五入）
+        BigDecimal fee = dailyPrice.multiply(OVERTIME_RATE)
+                .multiply(BigDecimal.valueOf(overtimeHours))
+                .divide(BigDecimal.valueOf(24), 2, RoundingMode.HALF_UP);
+        if (overtimeHours > OVERTIME_PENALTY_HOURS) {
+            fee = fee.add(dailyPrice.multiply(PENALTY_DAYS));
+        }
+        return fee;
     }
 
     /** 插入订单支付成功事件（本地消息表，与订单状态同事务）。 */

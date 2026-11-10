@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -22,6 +23,13 @@ public interface OrderMapper {
 
     @Select("SELECT * FROM orders WHERE id = #{id}")
     Order selectById(Long id);
+
+    /** 同用户同车型、时间窗重叠的进行中订单（防重复下单，配合分布式锁串行判断）。 */
+    @Select("SELECT * FROM orders WHERE user_id = #{userId} AND car_type_id = #{carTypeId} " +
+            "AND status IN ('PENDING','CONFIRMED','IN_USE') " +
+            "AND start_time < #{endTime} AND end_time > #{startTime}")
+    List<Order> selectOverlap(@Param("userId") Long userId, @Param("carTypeId") Long carTypeId,
+                              @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 
     /** 超时未支付订单：PENDING 且创建时间早于 N 分钟前，供定时任务兜底扫描。 */
     @Select("SELECT * FROM orders WHERE status = 'PENDING' " +
