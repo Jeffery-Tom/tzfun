@@ -52,3 +52,12 @@ doc/SQL优化与索引设计.md
 doc/简历-项目经验.md
 doc/阶段3任务卡.md
 doc/阶段3-模块*.md
+
+# 压测：脚本/说明入库，token 与产物不入库
+benchmark/tokens.csv
+benchmark/report/
+benchmark/result.jtl
+benchmark/jmeter.log
+
+# JVM 崩溃日志
+hs_err_pid*.log
