@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -18,6 +20,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -36,16 +39,21 @@ class SeckillServiceTest {
     @Mock CouponTemplateMapper couponTemplateMapper;
     @Mock MqProducer mqProducer;
     @Mock ValueOperations<String, String> valueOps;
+    @Mock RedissonClient redissonClient;
+    @Mock RLock lock;
     @InjectMocks SeckillService seckillService;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws InterruptedException {
         MockitoAnnotations.openMocks(this);
         // C 优化：getTemplate 走 Hash 缓存，必须 stub 以下三个，否则 NPE
         when(redis.opsForHash()).thenReturn(hashOps);
         when(hashOps.entries(anyString())).thenReturn(Collections.emptyMap()); // 默认缓存未命中 -> 查 DB
         doNothing().when(hashOps).putAll(anyString(), anyMap());
         when(redis.expire(anyString(), any(Duration.class))).thenReturn(true);
+        // 击穿防护：Redisson 锁，stub 为「抢锁成功 -> double-check -> 查库回填」
+        when(redissonClient.getLock(anyString())).thenReturn(lock);
+        when(lock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
     }
 
     private CouponTemplate validTemplate(int total) {

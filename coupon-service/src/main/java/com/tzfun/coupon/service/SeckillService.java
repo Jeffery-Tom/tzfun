@@ -6,6 +6,8 @@ import com.tzfun.common.CustomException;
 import com.tzfun.common.mq.MqProducer;
 import com.tzfun.coupon.entity.CouponTemplate;
 import com.tzfun.coupon.mapper.CouponTemplateMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.Resource;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -42,6 +44,14 @@ public class SeckillService {
     private static final long TTL_JITTER_SECONDS = 120;
     /** 空值缓存标记字段。 */
     private static final String EMPTY_FIELD = "empty";
+    /** 本地缓存 TTL（秒）：秒杀券详情读多写少，短 TTL 控制下架/改库存的感知延迟。 */
+    private static final long LOCAL_CACHE_SECONDS = 30;
+
+    /** 秒杀券详情本地缓存：热点券省一次 Redis 往返。 */
+    private final Cache<Long, CouponTemplate> localCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(Duration.ofSeconds(LOCAL_CACHE_SECONDS))
+            .build();
 
     @Resource
     private StringRedisTemplate redis;
@@ -130,9 +140,24 @@ public class SeckillService {
         redis.execute(INIT_SCRIPT, keys, args.toArray());
     }
 
-    /** 秒杀模板缓存：Redis Hash 存关键字段（含时间窗），避免每次秒杀查 DB。
-     *  三防护：穿透=空值缓存、击穿=Redisson 互斥重建、雪崩=TTL 随机抖动。 */
+    /** 秒杀模板三级缓存：本地 Caffeine(热点) -> Redis(三防护) -> DB。 */
     private CouponTemplate getTemplate(Long templateId) {
+        // 1. 本地缓存：热点券详情直接本地命中，省一次 Redis 往返
+        CouponTemplate t = localCache.getIfPresent(templateId);
+        if (t != null) {
+            return t;
+        }
+        // 2. 未命中走 Redis（穿透/击穿/雪崩三防护），结果非空回填本地
+        t = loadTemplateViaRedis(templateId);
+        if (t != null) {
+            localCache.put(templateId, t);
+        }
+        return t;
+    }
+
+    /** Redis 层模板缓存：Hash 存关键字段（含时间窗），避免每次秒杀查 DB。
+     *  三防护：穿透=空值缓存、击穿=Redisson 互斥重建、雪崩=TTL 随机抖动。 */
+    private CouponTemplate loadTemplateViaRedis(Long templateId) {
         String key = "coupon:template:" + templateId;
         // 1. 读缓存：命中（含空值标记）直接返回，不打 DB
         Map<Object, Object> h = redis.opsForHash().entries(key);
