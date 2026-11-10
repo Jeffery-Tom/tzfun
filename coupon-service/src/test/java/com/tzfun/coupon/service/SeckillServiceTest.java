@@ -9,11 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -21,11 +25,14 @@ import static org.mockito.Mockito.*;
 
 /**
  * SeckillService 单元测试：Mockito 注入 Redis/MQ/Mapper，不启动 Spring 上下文。
- * 覆盖模块D 的核心：库存分段售罄、秒杀成功发 MQ、MQ 失败回滚预扣、不在秒杀时间抛异常。
+ * 覆盖：库存分段售罄、秒杀成功发 MQ、MQ 失败回滚预扣、不在秒杀时间抛异常。
+ * 注：C 优化后 seckill() 改走 getTemplate()，先读 Redis Hash 缓存（miss 才查库），
+ *    因此需 mock opsForHash()/putAll()/expire()，否则 NPE。
  */
 class SeckillServiceTest {
 
     @Mock StringRedisTemplate redis;
+    @Mock HashOperations<String, Object, Object> hashOps;
     @Mock CouponTemplateMapper couponTemplateMapper;
     @Mock MqProducer mqProducer;
     @Mock ValueOperations<String, String> valueOps;
@@ -34,6 +41,11 @@ class SeckillServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // C 优化：getTemplate 走 Hash 缓存，必须 stub 以下三个，否则 NPE
+        when(redis.opsForHash()).thenReturn(hashOps);
+        when(hashOps.entries(anyString())).thenReturn(Collections.emptyMap()); // 默认缓存未命中 -> 查 DB
+        doNothing().when(hashOps).putAll(anyString(), anyMap());
+        when(redis.expire(anyString(), any(Duration.class))).thenReturn(true);
     }
 
     private CouponTemplate validTemplate(int total) {
