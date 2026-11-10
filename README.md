@@ -109,3 +109,5 @@ resources/lua/    occupy.lua · release.lua · seckill_stock.lua
 doc/schema.sql    数据库初始化脚本
 doc/设计-*.md      各模块设计文档
 ```
+这是用来测试PR和CI的演示分支
+
