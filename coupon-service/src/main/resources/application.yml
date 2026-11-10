@@ -42,3 +42,6 @@ rocketmq:
 
 sentinel:
   seckill-qps: 300
+
+redisson:
+  address: redis://localhost:6379
