@@ -23,6 +23,7 @@ import org.redisson.api.RedissonClient;
 
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,10 +99,11 @@ public class OrderService {
         }
 
         // Redisson 锁：串行化同一用户下单，锁内查重，防并发重复下单
+        // 不传 leaseTime，看门狗自动续期，避免锁内业务超时导致锁提前释放
         RLock lock = redissonClient.getLock("order:create:" + userId);
         boolean locked;
         try {
-            locked = lock.tryLock(3, 30, TimeUnit.SECONDS);
+            locked = lock.tryLock(3, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new CustomException("500", "系统繁忙，请重试");
@@ -146,6 +148,10 @@ public class OrderService {
             // 失败补偿：先扣库存再落库，落库失败须 release 回滚
             try {
                 orderMapper.insert(order);
+            } catch (DuplicateKeyException e) {
+                // 唯一索引兜底：锁失效时 DB 拦「同用户同车型同取车时间」重复
+                carServiceClient.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
+                throw new CustomException("400", "请勿重复下单");
             } catch (Exception e) {
                 carServiceClient.release(dto.getStoreId(), dto.getCarTypeId(), start, end);
                 throw e;

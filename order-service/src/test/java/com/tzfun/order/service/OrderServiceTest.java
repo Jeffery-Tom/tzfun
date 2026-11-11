@@ -69,7 +69,7 @@ class OrderServiceTest {
         // 模块A：默认锁可获取、且由当前线程持有（便于 finally 释放校验）
         when(redissonClient.getLock(anyString())).thenReturn(rLock);
         // tryLock 声明了受检异常 InterruptedException，这里用 doReturn 形式并交由方法 throws 处理
-        doReturn(true).when(rLock).tryLock(anyLong(), anyLong(), any());
+        doReturn(true).when(rLock).tryLock(anyLong(), any(TimeUnit.class));
         when(rLock.isHeldByCurrentThread()).thenReturn(true);
         // 单元测试无 Spring，@Value 不会注入，手动给超时释放主题赋值，并 stub 三参 send 重载
         ReflectionTestUtils.setField(orderService, "timeoutTopic", "order-pay-timeout");
