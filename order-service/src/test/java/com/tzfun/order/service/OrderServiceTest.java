@@ -17,6 +17,7 @@ import com.tzfun.order.mapper.CarTypeMapper;
 import com.tzfun.order.mapper.OrderMapper;
 import com.tzfun.order.mapper.StoreMapper;
 import com.tzfun.common.mq.MqProducer;
+import com.tzfun.common.util.SnowflakeIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -57,6 +58,7 @@ class OrderServiceTest {
     @Mock OutboxMapper outboxMapper;
     @Mock RedissonClient redissonClient;
     @Mock RLock rLock;
+    @Mock SnowflakeIdGenerator snowflakeIdGenerator;
     @InjectMocks OrderService orderService;
 
     private final ObjectMapper realMapper = new ObjectMapper();
@@ -74,6 +76,7 @@ class OrderServiceTest {
         // 单元测试无 Spring，@Value 不会注入，手动给超时释放主题赋值，并 stub 三参 send 重载
         ReflectionTestUtils.setField(orderService, "timeoutTopic", "order-pay-timeout");
         when(mqProducer.send(any(), any(), anyInt())).thenReturn(true);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1000L);
     }
 
     private Order pendingOrder(Long id) {

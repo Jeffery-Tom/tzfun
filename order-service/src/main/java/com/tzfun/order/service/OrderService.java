@@ -6,6 +6,7 @@ import com.tzfun.common.UserContext;
 import com.tzfun.common.mq.MqProducer;
 import com.tzfun.common.outbox.OutboxEvent;
 import com.tzfun.common.outbox.OutboxMapper;
+import com.tzfun.common.util.SnowflakeIdGenerator;
 import com.tzfun.order.dto.OrderDTO;
 import com.tzfun.order.entity.Car;
 import com.tzfun.order.entity.CarType;
@@ -33,9 +34,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -80,6 +79,8 @@ public class OrderService {
     private ObjectMapper objectMapper;
     @Resource
     private RedissonClient redissonClient;
+    @Resource
+    private SnowflakeIdGenerator snowflakeIdGenerator;
 
     @Value("${rocketmq.order.timeout-topic}")
     private String timeoutTopic;
@@ -385,6 +386,6 @@ public class OrderService {
     }
 
     private String genOrderNo() {
-        return "TZ" + System.currentTimeMillis() + String.format("%04d", ThreadLocalRandom.current().nextInt(10000));
+        return "TZ" + snowflakeIdGenerator.nextId();
     }
 }

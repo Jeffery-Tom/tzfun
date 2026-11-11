@@ -36,6 +36,9 @@ rocketmq:
 redisson:
   address: redis://localhost:6379
 
+snowflake:
+  worker-id: 1  # 雪花算法机器号：多实例部署时每实例唯一（0-1023）
+
 feign:
   sentinel:
     enabled: true
