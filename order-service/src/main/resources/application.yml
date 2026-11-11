@@ -35,3 +35,7 @@ rocketmq:
 
 redisson:
   address: redis://localhost:6379
+
+feign:
+  sentinel:
+    enabled: true

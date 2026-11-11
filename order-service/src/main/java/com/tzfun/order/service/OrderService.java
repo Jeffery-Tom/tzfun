@@ -119,7 +119,11 @@ public class OrderService {
             LocalDate end = dto.getEndTime().toLocalDate();
             // 原子占库存：Feign 调 car-service，car 内部 countAvailable + initSlot + Lua
             Result<Boolean> occupyR = carServiceClient.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end);
-            if (occupyR == null || !"200".equals(occupyR.getCode()) || !Boolean.TRUE.equals(occupyR.getData())) {
+            // 降级/熔断：下游不可用返回 500，与「无车」区分开
+            if (occupyR == null || "500".equals(occupyR.getCode())) {
+                throw new CustomException("500", "库存服务不可用，请稍后再试");
+            }
+            if (!"200".equals(occupyR.getCode()) || !Boolean.TRUE.equals(occupyR.getData())) {
                 throw new CustomException("400", "该时段无车");
             }
 

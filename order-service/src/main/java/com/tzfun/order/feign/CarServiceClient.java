@@ -11,7 +11,7 @@ import java.time.LocalDate;
 /**
  * 调 car-service：时间窗库存原子占/释。
  */
-@FeignClient(name = "car-service")
+@FeignClient(name = "car-service", fallbackFactory = CarServiceClientFallbackFactory.class)
 public interface CarServiceClient {
 
     @PostMapping("/inventory/occupy")
