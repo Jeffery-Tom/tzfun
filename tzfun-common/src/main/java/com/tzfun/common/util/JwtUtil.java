@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 工具：签发与解析。
@@ -30,6 +31,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .claim("userId", userId)
                 .claim("role", role)
+                .id(UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expireMs))
                 .signWith(key)

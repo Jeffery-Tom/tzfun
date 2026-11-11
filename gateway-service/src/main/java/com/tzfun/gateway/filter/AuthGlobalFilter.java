@@ -8,6 +8,7 @@ import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,8 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     @Resource
     private JwtUtil jwtUtil;
+    @Resource
+    private ReactiveStringRedisTemplate redis;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -41,15 +44,26 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             Claims claims = jwtUtil.parseToken(auth.substring(7));
             Long userId = Long.valueOf(String.valueOf(claims.get("userId")));
             String role = String.valueOf(claims.get("role"));
-            // 覆盖写入身份头，防止外部伪造
-            ServerHttpRequest mutated = exchange.getRequest().mutate()
-                    .header("X-User-Id", String.valueOf(userId))
-                    .header("X-User-Role", role)
-                    .build();
-            return chain.filter(exchange.mutate().request(mutated).build());
+            String jti = claims.getId();
+            // 黑名单校验：登出后 jti 已入黑名单，命中则拒绝
+            if (jti == null) {
+                return forward(exchange, chain, userId, role);
+            }
+            return redis.opsForValue().get("jwt:blacklist:" + jti)
+                    .hasElement()
+                    .flatMap(hit -> hit ? unauthorized(exchange) : forward(exchange, chain, userId, role));
         } catch (Exception e) {
             return unauthorized(exchange);
         }
+    }
+
+    /** 身份头覆盖写入（防外部伪造）并放行。 */
+    private Mono<Void> forward(ServerWebExchange exchange, GatewayFilterChain chain, Long userId, String role) {
+        ServerHttpRequest mutated = exchange.getRequest().mutate()
+                .header("X-User-Id", String.valueOf(userId))
+                .header("X-User-Role", role)
+                .build();
+        return chain.filter(exchange.mutate().request(mutated).build());
     }
 
     private Mono<Void> unauthorized(ServerWebExchange exchange) {

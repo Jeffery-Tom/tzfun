@@ -9,6 +9,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
@@ -30,6 +32,10 @@ class AuthGlobalFilterTest {
     JwtUtil jwtUtil;
     @Mock
     GatewayFilterChain chain;
+    @Mock
+    ReactiveStringRedisTemplate redis;
+    @Mock
+    ReactiveValueOperations<String, String> valueOps;
     @InjectMocks
     AuthGlobalFilter filter;
 
@@ -37,6 +43,7 @@ class AuthGlobalFilterTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         when(chain.filter(any())).thenReturn(Mono.empty());
+        when(redis.opsForValue()).thenReturn(valueOps);
     }
 
     @Test
@@ -61,7 +68,9 @@ class AuthGlobalFilterTest {
         Claims claims = mock(Claims.class);
         when(claims.get("userId")).thenReturn(10L);
         when(claims.get("role")).thenReturn("RENTER");
+        when(claims.getId()).thenReturn("jti-123");
         when(jwtUtil.parseToken(anyString())).thenReturn(claims);
+        when(valueOps.get("jwt:blacklist:jti-123")).thenReturn(Mono.empty());
 
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/user-service/user/info")
@@ -72,6 +81,24 @@ class AuthGlobalFilterTest {
         verify(chain).filter(captor.capture());
         assertEquals("10", captor.getValue().getRequest().getHeaders().getFirst("X-User-Id"));
         assertEquals("RENTER", captor.getValue().getRequest().getHeaders().getFirst("X-User-Role"));
+    }
+
+    @Test
+    void blacklistedToken_returns401() {
+        Claims claims = mock(Claims.class);
+        when(claims.get("userId")).thenReturn(10L);
+        when(claims.get("role")).thenReturn("RENTER");
+        when(claims.getId()).thenReturn("jti-blacklisted");
+        when(jwtUtil.parseToken(anyString())).thenReturn(claims);
+        when(valueOps.get("jwt:blacklist:jti-blacklisted")).thenReturn(Mono.just("1"));
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/user-service/user/info")
+                        .header("Authorization", "Bearer abc.def.ghi").build());
+        filter.filter(exchange, chain).block();
+
+        verify(chain, never()).filter(any());
+        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
     }
 
     @Test
