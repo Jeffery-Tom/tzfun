@@ -21,8 +21,8 @@ public class CarServiceClientFallbackFactory implements FallbackFactory<CarServi
     public CarServiceClient create(Throwable cause) {
         return new CarServiceClient() {
             @Override
-            public Result<Boolean> occupy(Long storeId, Long carTypeId, LocalDate start, LocalDate end) {
-                log.error("car-service 占库存降级：storeId={} carTypeId={} start={}", storeId, carTypeId, start, cause);
+            public Result<Boolean> occupy(Long storeId, Long carTypeId, LocalDate start, LocalDate end, String requestId) {
+                log.error("car-service 占库存降级：storeId={} carTypeId={} start={} requestId={}", storeId, carTypeId, start, requestId, cause);
                 return Result.error("500", "库存服务不可用，请稍后再试");
             }
 

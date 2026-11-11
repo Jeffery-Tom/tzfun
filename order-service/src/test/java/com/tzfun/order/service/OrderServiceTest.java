@@ -156,7 +156,7 @@ class OrderServiceTest {
         when(carTypeMapper.selectById(1L)).thenReturn(type);
         when(orderMapper.selectOverlap(eq(10L), eq(1L), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(Collections.emptyList());
-        when(carServiceClient.occupy(eq(1L), eq(1L), any(LocalDate.class), any(LocalDate.class)))
+        when(carServiceClient.occupy(eq(1L), eq(1L), any(LocalDate.class), any(LocalDate.class), any(String.class)))
                 .thenReturn(Result.success(true));
         when(mqProducer.send(any(), any())).thenReturn(true);
 
@@ -167,7 +167,7 @@ class OrderServiceTest {
         assertEquals(new BigDecimal("200"), o.getTotalAmount()); // 2 天 * 100
         // 锁内查重真的被调用
         verify(orderMapper).selectOverlap(eq(10L), eq(1L), any(LocalDateTime.class), any(LocalDateTime.class));
-        verify(carServiceClient).occupy(eq(1L), eq(1L), any(LocalDate.class), any(LocalDate.class));
+        verify(carServiceClient).occupy(eq(1L), eq(1L), any(LocalDate.class), any(LocalDate.class), any(String.class));
         verify(orderMapper).insert(any(Order.class));
         verify(mqProducer).send(any(), any(), anyInt());
         // 无论成败 finally 都释放锁
@@ -192,7 +192,7 @@ class OrderServiceTest {
         CustomException ex = assertThrows(CustomException.class, () -> orderService.createOrder(dto));
         assertEquals("该时段已有相同车型的订单", ex.getMessage());
         // 被拒后绝不占库存、绝不落库
-        verify(carServiceClient, never()).occupy(anyLong(), anyLong(), any(), any());
+        verify(carServiceClient, never()).occupy(anyLong(), anyLong(), any(), any(), any());
         verify(orderMapper, never()).insert(any());
         verify(rLock).unlock();
         UserContext.clear();

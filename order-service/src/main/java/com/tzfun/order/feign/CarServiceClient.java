@@ -18,7 +18,8 @@ public interface CarServiceClient {
     Result<Boolean> occupy(@RequestParam("storeId") Long storeId,
                            @RequestParam("carTypeId") Long carTypeId,
                            @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-                           @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end);
+                           @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+                           @RequestParam("requestId") String requestId);
 
     @PostMapping("/inventory/release")
     Result<Void> release(@RequestParam("storeId") Long storeId,

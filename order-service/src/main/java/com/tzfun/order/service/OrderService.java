@@ -120,8 +120,10 @@ public class OrderService {
 
             LocalDate start = dto.getStartTime().toLocalDate();
             LocalDate end = dto.getEndTime().toLocalDate();
+            // 先取订单号，作为占库存的幂等键（Feign 超时重试靠它去重，不重复扣）
+            String orderNo = genOrderNo();
             // 原子占库存：Feign 调 car-service，car 内部 countAvailable + initSlot + Lua
-            Result<Boolean> occupyR = carServiceClient.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end);
+            Result<Boolean> occupyR = carServiceClient.occupy(dto.getStoreId(), dto.getCarTypeId(), start, end, orderNo);
             // 降级/熔断：下游不可用返回 500，与「无车」区分开
             if (occupyR == null || "500".equals(occupyR.getCode())) {
                 throw new CustomException("500", "库存服务不可用，请稍后再试");
@@ -135,7 +137,7 @@ public class OrderService {
             BigDecimal total = type.getDailyPrice().multiply(BigDecimal.valueOf(days));
 
             Order order = new Order();
-            order.setOrderNo(genOrderNo());
+            order.setOrderNo(orderNo);
             order.setUserId(userId);
             order.setStoreId(dto.getStoreId());
             order.setCarTypeId(dto.getCarTypeId());

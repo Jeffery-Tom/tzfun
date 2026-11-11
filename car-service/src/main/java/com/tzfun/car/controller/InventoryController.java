@@ -28,7 +28,8 @@ public class InventoryController {
     public Result<Boolean> occupy(@RequestParam Long storeId,
                                   @RequestParam Long carTypeId,
                                   @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+                                  @RequestParam String requestId) {
         int n = carTypeMapper.countAvailable(storeId, carTypeId);
         if (n <= 0) {
             return Result.success(false);
@@ -36,7 +37,7 @@ public class InventoryController {
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
             inventoryService.initSlot(storeId, carTypeId, d, n);
         }
-        return Result.success(inventoryService.occupy(storeId, carTypeId, start, end));
+        return Result.success(inventoryService.occupy(storeId, carTypeId, start, end, requestId));
     }
 
     @PostMapping("/release")

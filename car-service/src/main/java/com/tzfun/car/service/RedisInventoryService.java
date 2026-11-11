@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,18 +68,28 @@ public class RedisInventoryService {
         return v == null ? 0 : Integer.parseInt(v);
     }
 
-    /** 占用 [start,end] 每天 1 辆，检查+扣减原子。 */
-    public boolean occupy(Long storeId, Long carTypeId, LocalDate start, LocalDate end) {
+    /** 占用 [start,end] 每天 1 辆，检查+扣减原子。requestId 作幂等键：Feign 超时重试不重复扣。 */
+    public boolean occupy(Long storeId, Long carTypeId, LocalDate start, LocalDate end, String requestId) {
+        // 幂等：SETNX 占位（默认失败），首次拿到才真正扣减；重复请求读回第一次的结果
+        String idemKey = "idem:occupy:" + requestId;
+        Boolean first = redis.opsForValue().setIfAbsent(idemKey, "0", Duration.ofMinutes(10));
+        if (Boolean.FALSE.equals(first)) {
+            return "1".equals(redis.opsForValue().get(idemKey));
+        }
         //expand方法获取redis的key,把租期内每一天的 key 全部放进 keys 数组传给 Lua。
         //expand里已循环生成key
         List<String> keys = expand(storeId, carTypeId, start, end);
-        //keys为空占用失败
+        //keys为空占用失败（未真正扣减，释放幂等键允许重试）
         if (keys.isEmpty()) {
+            redis.delete(idemKey);
             return false;
         }
         //keys不为空,  实现lua占用:检查+扣减原子 参数 need=1
         Long r = redis.execute(OCCUPY_SCRIPT, keys, "1");
-        return r != null && r == 1L;
+        boolean ok = r != null && r == 1L;
+        // 记录结果：成功=1，失败=0，重试据此返回，不再扣减
+        redis.opsForValue().set(idemKey, ok ? "1" : "0", Duration.ofMinutes(10));
+        return ok;
     }
 
     /** 释放 [start,end] 每天 1 辆。 */
