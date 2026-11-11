@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -48,12 +50,21 @@ public class SeckillService {
     private static final String EMPTY_FIELD = "empty";
     /** 本地缓存 TTL（秒）：秒杀券详情读多写少，短 TTL 控制下架/改库存的感知延迟。 */
     private static final long LOCAL_CACHE_SECONDS = 30;
+    /** 延迟双删的第二次删除延迟（毫秒）：兜底并发读在写库与删缓存之间回填旧值。 */
+    private static final long DELAY_EVICT_MILLIS = 500;
 
     /** 秒杀券详情本地缓存：热点券省一次 Redis 往返。 */
     private final Cache<Long, CouponTemplate> localCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofSeconds(LOCAL_CACHE_SECONDS))
             .build();
+
+    /** 延迟双删的第二次删除用单线程调度器，避免污染公共线程池。 */
+    private static final ScheduledExecutorService DELAYED_EVICTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "cache-delayed-evictor");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Resource
     private StringRedisTemplate redis;
@@ -83,6 +94,24 @@ public class SeckillService {
 
     private String initKey(Long templateId) {
         return "seckill:stock:" + templateId + ":init";
+    }
+
+    private String templateKey(Long templateId) {
+        return "coupon:template:" + templateId;
+    }
+
+    /**
+     * 缓存失效（延迟双删）：下架写 DB 后调用，先删 Redis + 失效本地，延迟再删一次。
+     * 第二次删兜底「并发读在写库与删缓存之间读到旧值并回填」造成的脏缓存。
+     */
+    public void evictTemplateCache(Long templateId) {
+        String key = templateKey(templateId);
+        redis.delete(key);
+        localCache.invalidate(templateId);
+        DELAYED_EVICTOR.schedule(() -> {
+            redis.delete(key);
+            localCache.invalidate(templateId);
+        }, DELAY_EVICT_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     /** 秒杀入口：校验 -> 初始化分段库存 -> 轮询分段预扣 -> 发 MQ 异步落库。返回成功仅代表已受理。 */
@@ -160,7 +189,7 @@ public class SeckillService {
     /** Redis 层模板缓存：Hash 存关键字段（含时间窗），避免每次秒杀查 DB。
      *  三防护：穿透=空值缓存、击穿=Redisson 互斥重建、雪崩=TTL 随机抖动。 */
     private CouponTemplate loadTemplateViaRedis(Long templateId) {
-        String key = "coupon:template:" + templateId;
+        String key = templateKey(templateId);
         // 1. 读缓存：命中（含空值标记）直接返回，不打 DB
         Map<Object, Object> h = redis.opsForHash().entries(key);
         if (h != null && !h.isEmpty()) {

@@ -25,6 +25,10 @@ public interface CouponTemplateMapper {
             "WHERE id = #{id} AND claimed_count < total_count")
     int incrementClaimed(@Param("id") Long id);
 
+    /** 下架（条件更新防并发重复下架）；行数=0 表示已下架或不存在。 */
+    @Update("UPDATE coupon_template SET status = 0 WHERE id = #{id} AND status = 1")
+    int offline(@Param("id") Long id);
+
     /** 即将开始的秒杀券（预热用）：上架且 5 分钟内即将开始。 */
     @Select("SELECT * FROM coupon_template WHERE seckill = 1 AND status = 1 " +
             "AND claim_start > NOW() AND claim_start <= DATE_ADD(NOW(), INTERVAL 5 MINUTE)")

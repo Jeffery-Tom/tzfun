@@ -24,6 +24,8 @@ public class CouponService {
     private CouponTemplateMapper couponTemplateMapper;
     @Resource
     private UserCouponMapper userCouponMapper;
+    @Resource
+    private SeckillService seckillService;
 
     /**
      * 领券：先插 user_coupon（唯一索引拦重复领），再条件更新 claimed_count。
@@ -107,5 +109,13 @@ public class CouponService {
     /** 退券：取消/超时退回（幂等，非已用状态静默忽略）。 */
     public void returnCoupon(Long userCouponId) {
         userCouponMapper.returnCoupon(userCouponId);
+    }
+
+    /** 下架券模板：条件更新 status 1→0，写 DB 后延迟双删缓存，避免旧缓存继续命中已下架的券。 */
+    public void offlineTemplate(Long templateId) {
+        if (couponTemplateMapper.offline(templateId) != 1) {
+            throw new CustomException("404", "券模板不存在或已下架");
+        }
+        seckillService.evictTemplateCache(templateId);
     }
 }

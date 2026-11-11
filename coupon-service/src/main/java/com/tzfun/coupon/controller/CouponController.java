@@ -58,4 +58,12 @@ public class CouponController {
     public Result<List<UserCouponVO>> myCoupons() {
         return Result.success(userCouponMapper.listMyCoupons(UserContext.getUserId()));
     }
+
+    /** 管理员下架券模板：写 DB 后延迟双删缓存，下架立即生效。 */
+    @PostMapping("/admin/offline/{templateId}")
+    public Result<Void> offline(@PathVariable Long templateId) {
+        UserContext.requireAdmin();
+        couponService.offlineTemplate(templateId);
+        return Result.success();
+    }
 }
