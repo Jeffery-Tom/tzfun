@@ -9,6 +9,7 @@ import com.tzfun.coupon.mapper.CouponTemplateMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,7 @@ import java.util.concurrent.TimeUnit;
  * 优惠券秒杀：库存分段(10 段) + Redis Lua 预扣(防超卖) + MQ 异步落库(唯一索引兜底)。
  * 分段打散 Redis 单 key 热点；落库失败按段号回滚预扣。
  */
+@Slf4j
 @Service
 public class SeckillService {
 
@@ -234,5 +236,35 @@ public class SeckillService {
     /** 回滚预扣：INCRBY +1（供发送失败/落库失败时退回，精确到段）。 */
     public void rollbackStock(Long templateId, int seg) {
         redis.opsForValue().increment(stockKey(templateId, seg), 1);
+    }
+
+    /** 预热：秒杀开始前提前初始化分段库存（幂等，已初始化则跳过）。 */
+    public void warmupStock(Long templateId, int totalCount) {
+        if (!Boolean.TRUE.equals(redis.hasKey(initKey(templateId)))) {
+            initStock(templateId, totalCount);
+        }
+    }
+
+    /** 对账：比对 Redis 已扣 vs DB 已发，Redis 多扣则回补差额。
+     *  仅对已结束的券执行（MQ 应已消费完），避免把在途消息误判为丢失。 */
+    public void reconcileStock(CouponTemplate t) {
+        if (!Boolean.TRUE.equals(redis.hasKey(initKey(t.getId())))) {
+            return; // 未初始化过库存，跳过
+        }
+        long redisLeft = 0;
+        for (int seg = 0; seg < SEG; seg++) {
+            String v = redis.opsForValue().get(stockKey(t.getId(), seg));
+            if (v != null) {
+                redisLeft += Long.parseLong(v);
+            }
+        }
+        long redisConsumed = t.getTotalCount() - redisLeft;
+        long dbIssued = t.getClaimedCount() == null ? 0 : t.getClaimedCount();
+        long gap = redisConsumed - dbIssued;
+        if (gap > 0) {
+            // 回补到段 0，保证 Redis 剩余与 DB 账实相符
+            redis.opsForValue().increment(stockKey(t.getId(), 0), gap);
+            log.warn("秒杀对账回补：template={} redis已扣={} db已发={} 回补={}", t.getId(), redisConsumed, dbIssued, gap);
+        }
     }
 }

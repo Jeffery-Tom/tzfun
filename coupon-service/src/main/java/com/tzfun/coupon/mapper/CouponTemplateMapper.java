@@ -24,4 +24,14 @@ public interface CouponTemplateMapper {
     @Update("UPDATE coupon_template SET claimed_count = claimed_count + 1 " +
             "WHERE id = #{id} AND claimed_count < total_count")
     int incrementClaimed(@Param("id") Long id);
+
+    /** 即将开始的秒杀券（预热用）：上架且 5 分钟内即将开始。 */
+    @Select("SELECT * FROM coupon_template WHERE seckill = 1 AND status = 1 " +
+            "AND claim_start > NOW() AND claim_start <= DATE_ADD(NOW(), INTERVAL 5 MINUTE)")
+    List<CouponTemplate> listSeckillStartingSoon();
+
+    /** 已结束的秒杀券（对账用）：结束超过 5 分钟，MQ 应已消费完。 */
+    @Select("SELECT * FROM coupon_template WHERE seckill = 1 " +
+            "AND claim_end < DATE_SUB(NOW(), INTERVAL 5 MINUTE)")
+    List<CouponTemplate> listSeckillEnded();
 }
