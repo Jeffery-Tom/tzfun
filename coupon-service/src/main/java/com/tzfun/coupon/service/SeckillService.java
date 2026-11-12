@@ -52,6 +52,10 @@ public class SeckillService {
     private static final long LOCAL_CACHE_SECONDS = 30;
     /** 延迟双删的第二次删除延迟（毫秒）：兜底并发读在写库与删缓存之间回填旧值。 */
     private static final long DELAY_EVICT_MILLIS = 500;
+    /** 秒杀用户级频控：滑动窗口（秒）。 */
+    private static final long RATE_WINDOW_SECONDS = 10;
+    /** 秒杀用户级频控：窗口内最大请求次数。 */
+    private static final long RATE_MAX_REQUESTS = 5;
 
     /** 秒杀券详情本地缓存：热点券省一次 Redis 往返。 */
     private final Cache<Long, CouponTemplate> localCache = Caffeine.newBuilder()
@@ -80,6 +84,7 @@ public class SeckillService {
 
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT = load("lua/seckill_stock.lua");
     private static final DefaultRedisScript<Long> INIT_SCRIPT = load("lua/seckill_init.lua");
+    private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT = load("lua/seckill_rate_limit.lua");
 
     private static DefaultRedisScript<Long> load(String path) {
         DefaultRedisScript<Long> script = new DefaultRedisScript<>();
@@ -100,6 +105,10 @@ public class SeckillService {
         return "coupon:template:" + templateId;
     }
 
+    private String rateKey(Long templateId, Long userId) {
+        return "seckill:rate:" + templateId + ":" + userId;
+    }
+
     /**
      * 缓存失效（延迟双删）：下架写 DB 后调用，先删 Redis + 失效本地，延迟再删一次。
      * 第二次删兜底「并发读在写库与删缓存之间读到旧值并回填」造成的脏缓存。
@@ -117,6 +126,10 @@ public class SeckillService {
     /** 秒杀入口：校验 -> 初始化分段库存 -> 轮询分段预扣 -> 发 MQ 异步落库。返回成功仅代表已受理。 */
     @SentinelResource(value = "seckill", blockHandler = "seckillBlock")
     public void seckill(Long templateId, Long userId) {
+        // 用户级滑动窗口频控：防同一用户脚本刷秒杀
+        if (!checkRateLimit(templateId, userId)) {
+            throw new CustomException("429", "操作太频繁，请稍后再试");
+        }
         CouponTemplate t = getTemplate(templateId);
         if (t == null || t.getSeckill() == null || t.getSeckill() != 1
                 || t.getStatus() == null || t.getStatus() != 1) {
@@ -155,6 +168,20 @@ public class SeckillService {
     /** Sentinel 限流兜底：超 QPS 阈值快速失败。 */
     public void seckillBlock(Long templateId, Long userId, BlockException ex) {
         throw new CustomException("429", "秒杀太火爆，请稍后再试");
+    }
+
+    /** 用户级滑动窗口限流：同一用户对同一秒杀券，窗口内请求数超阈值则拒绝。 */
+    private boolean checkRateLimit(Long templateId, Long userId) {
+        long now = System.currentTimeMillis();
+        // member 需唯一（时间戳+随机），否则 ZADD 同 member 覆盖导致计数不准
+        String member = now + "-" + ThreadLocalRandom.current().nextInt(10000);
+        Long r = redis.execute(RATE_LIMIT_SCRIPT,
+                List.of(rateKey(templateId, userId)),
+                String.valueOf(RATE_WINDOW_SECONDS),
+                String.valueOf(RATE_MAX_REQUESTS),
+                String.valueOf(now),
+                member);
+        return r != null && r == 1L;
     }
 
     /** 初始化 10 段库存（Lua 原子，余数分摊到前几段，保证总和=总量）。 */

@@ -54,6 +54,8 @@ class SeckillServiceTest {
         // 击穿防护：Redisson 锁，stub 为「抢锁成功 -> double-check -> 查库回填」
         when(redissonClient.getLock(anyString())).thenReturn(lock);
         when(lock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        // 频控放行：滑动窗口限流脚本（2 固定 + 4 varargs）默认返回 1
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any(), any(), any())).thenReturn(1L);
     }
 
     private CouponTemplate validTemplate(int total) {
@@ -114,5 +116,16 @@ class SeckillServiceTest {
         when(couponTemplateMapper.selectById(1L)).thenReturn(t);
         CustomException ex = assertThrows(CustomException.class, () -> seckillService.seckill(1L, 100L));
         assertEquals("不在秒杀时间内", ex.getMessage());
+    }
+
+    @Test
+    void seckill_rateLimited_throws() {
+        when(couponTemplateMapper.selectById(1L)).thenReturn(validTemplate(100));
+        // 频控脚本返回 0（窗口内超限），应拒绝且不查库存、不发 MQ
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any(), any(), any())).thenReturn(0L);
+
+        CustomException ex = assertThrows(CustomException.class, () -> seckillService.seckill(1L, 100L));
+        assertEquals("操作太频繁，请稍后再试", ex.getMessage());
+        verify(mqProducer, never()).send(any(), any());
     }
 }
