@@ -58,6 +58,9 @@ benchmark/tokens.csv
 benchmark/report/
 benchmark/result.jtl
 benchmark/jmeter.log
+benchmark/order-report/content/
+benchmark/order-report/index.html
+benchmark/order-report/sbadmin2-1.0.7/
 
 # JVM 崩溃日志
 hs_err_pid*.log

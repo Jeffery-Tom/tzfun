@@ -1,0 +1,34 @@
+{
+  "下单 POST /order" : {
+    "transaction" : "下单 POST /order",
+    "sampleCount" : 100,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 552.2399999999999,
+    "medianResTime" : 562.5,
+    "minResTime" : 228.0,
+    "maxResTime" : 861.0,
+    "pct1ResTime" : 807.6,
+    "pct2ResTime" : 837.6999999999999,
+    "pct3ResTime" : 860.93,
+    "throughput" : 116.0092807424594,
+    "receivedKBytesPerSec" : 25.82112819025522,
+    "sentKBytesPerSec" : 59.02425319025522
+  },
+  "Total" : {
+    "transaction" : "Total",
+    "sampleCount" : 100,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 552.2399999999999,
+    "medianResTime" : 562.5,
+    "minResTime" : 228.0,
+    "maxResTime" : 861.0,
+    "pct1ResTime" : 807.6,
+    "pct2ResTime" : 837.6999999999999,
+    "pct3ResTime" : 860.93,
+    "throughput" : 116.0092807424594,
+    "receivedKBytesPerSec" : 25.82112819025522,
+    "sentKBytesPerSec" : 59.02425319025522
+  }
+}
