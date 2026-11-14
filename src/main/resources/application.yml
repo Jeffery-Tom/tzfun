@@ -38,3 +38,11 @@ rocketmq:
     timeout-topic: order-pay-timeout
   coupon:
     seckill-topic: coupon-seckill
+
+# SpringDoc OpenAPI（Swagger UI）
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    try-it-out-enabled: true

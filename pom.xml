@@ -90,6 +90,12 @@
 				<artifactId>redisson</artifactId>
 				<version>${redisson.version}</version>
 			</dependency>
+			<!-- SpringDoc OpenAPI（Swagger UI，适配 Spring Boot 4 / Spring Framework 7） -->
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+				<version>3.2.0</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -122,6 +128,7 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<configuration>
 						<encoding>UTF-8</encoding>
+						<parameters>true</parameters>
 						<annotationProcessorPaths>
 							<path>
 								<groupId>org.projectlombok</groupId>
