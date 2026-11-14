@@ -90,13 +90,18 @@
 				<artifactId>redisson</artifactId>
 				<version>${redisson.version}</version>
 			</dependency>
-			<!-- SpringDoc OpenAPI（Swagger UI，适配 Spring Boot 4 / Spring Framework 7） -->
-			<dependency>
-				<groupId>org.springdoc</groupId>
-				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-				<version>3.2.0</version>
-			</dependency>
-		</dependencies>
+		<!-- SpringDoc OpenAPI（Swagger UI，适配 Spring Boot 4 / Spring Framework 7） -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+			<version>3.2.0</version>
+		</dependency>
+	</dependencies>
 	</dependencyManagement>
 
 	<dependencies>

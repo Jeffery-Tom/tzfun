@@ -50,3 +50,20 @@ spring:
 jwt:
   secret: tzfun-jwt-secret-key-please-change-me-32bytes-min
   expire-ms: 86400000
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: user-service
+        url: /user-service/v3/api-docs
+      - name: car-service
+        url: /car-service/v3/api-docs
+      - name: order-service
+        url: /order-service/v3/api-docs
+      - name: coupon-service
+        url: /coupon-service/v3/api-docs
+      - name: payment-service
+        url: /payment-service/v3/api-docs

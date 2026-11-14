@@ -33,7 +33,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         // 网关层路径带 /xxx-service 前缀，用 endsWith 匹配白名单
-        if (path.endsWith("/user/login") || path.endsWith("/user/register") || path.endsWith("/pay/notify")) {
+        // 白名单：公开登录/注册/支付回调；以及 Swagger/OpenAPI 文档路径（网关自身 ui 与各服务经网关的 /xxx-service/v3/api-docs）
+        if (path.endsWith("/user/login") || path.endsWith("/user/register") || path.endsWith("/pay/notify")
+                || path.contains("/swagger-ui") || path.contains("/v3/api-docs")) {
             return chain.filter(exchange);
         }
         String auth = exchange.getRequest().getHeaders().getFirst("Authorization");
